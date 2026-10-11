@@ -198,11 +198,10 @@ async def aisstream_consumer():
             async with websockets.connect(AISSTREAM_URL, ping_interval=20, ping_timeout=20) as ws:
                 subscription = {
                     "APIKey": API_KEY,
-                    "BoundingBoxes": [[[-90, -180], [90, 180]]],
-                    "FilterMessageTypes": ["PositionReport", "ShipStaticData"]
+                    "BoundingBoxes": [[[-90, -180], [90, 180]]]
                 }
                 await ws.send(json.dumps(subscription))
-                logger.info("Subscribed to global AIS stream successfully.")
+                logger.info("Subscribed to global unfiltered AIS stream successfully.")
 
                 msg_counter = 0
                 while True:
@@ -249,8 +248,10 @@ async def aisstream_consumer():
                         name = meta.get("ShipName").strip()
                         if name: v["name"] = name
 
-                    if msg_type == "PositionReport":
-                        pos = data.get("Message", {}).get("PositionReport", {})
+                    msg_body = data.get("Message", {})
+
+                    if msg_type in ("PositionReport", "StandardClassBPositionReport", "ExtendedClassBPositionReport"):
+                        pos = msg_body.get(msg_type, {})
                         lat = pos.get("Latitude", v["lat"])
                         lon = pos.get("Longitude", v["lon"])
                         sog = pos.get("Sog", v["sog"])
@@ -263,13 +264,17 @@ async def aisstream_consumer():
                         v["sog"] = round(sog, 1)
                         v["cog"] = round(cog, 1)
                         v["heading"] = round(hdg, 1)
-                        v["rate_of_turn"] = pos.get("RateOfTurn", v.get("rate_of_turn", 0))
-                        v["nav_status"] = pos.get("NavigationalStatus", v.get("nav_status", 0))
-                        v["pos_accuracy"] = pos.get("PositionAccuracy", v.get("pos_accuracy", True))
+                        if "RateOfTurn" in pos: v["rate_of_turn"] = pos["RateOfTurn"]
+                        if "NavigationalStatus" in pos: v["nav_status"] = pos["NavigationalStatus"]
+                        if msg_type == "StandardClassBPositionReport" and v["type"] == "Commercial Vessel":
+                            v["type"] = "Pleasure Craft"
+                        if msg_type == "ExtendedClassBPositionReport":
+                            if pos.get("ShipName"): v["name"] = pos["ShipName"].strip() or v["name"]
+                            if pos.get("Type"): v["type"] = map_ship_type(pos["Type"])
                         v["time_utc"] = meta.get("time_utc", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"))
 
                     elif msg_type == "ShipStaticData":
-                        static = data.get("Message", {}).get("ShipStaticData", {})
+                        static = msg_body.get("ShipStaticData", {})
                         if static.get("Name"):
                             v["name"] = static["Name"].strip() or v["name"]
                         if static.get("ImoNumber"):
@@ -295,15 +300,25 @@ async def aisstream_consumer():
                             if l > 0: v["length"] = l
                             if w > 0: v["width"] = w
 
+                    elif msg_type == "StaticDataReport":
+                        sdr = msg_body.get("StaticDataReport", {})
+                        rep_a = sdr.get("ReportA", {})
+                        rep_b = sdr.get("ReportB", {})
+                        if rep_a.get("Valid") and rep_a.get("ShipName"):
+                            v["name"] = rep_a["ShipName"].strip() or v["name"]
+                        if rep_b.get("Valid"):
+                            if rep_b.get("Type"): v["type"] = map_ship_type(rep_b["Type"])
+                            if rep_b.get("CallSign"): v["call_sign"] = rep_b["CallSign"].strip()
+
                     msg_counter += 1
-                    if msg_counter % 8 == 0:
+                    if msg_counter % 2 == 0:
                         await broadcast_to_clients({
                             "type": "VESSEL_UPDATE",
                             "vessel": v
                         })
 
-                    # Maintain capacity around 8,000 vessels
-                    if len(vessels_db) > 8000:
+                    # Maintain capacity around 25,000 vessels
+                    if len(vessels_db) > 25000:
                         oldest = min(vessels_db.keys(), key=lambda k: vessels_db[k].get("last_updated", 0))
                         del vessels_db[oldest]
 

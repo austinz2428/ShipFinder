@@ -73,9 +73,8 @@ export default function LiveFleetSidebar({
     );
   });
 
-  const displayVessels = selectedType === 'GREAT_LAKES'
-    ? filteredVessels.slice(0, 20)
-    : filteredVessels.slice(0, 150);
+  const displayLimit = selectedType === 'GREAT_LAKES' ? 20 : (filterQuery ? 350 : 200);
+  const displayVessels = filteredVessels.slice(0, displayLimit);
 
   if (isCollapsed) {
     return (
@@ -89,7 +88,7 @@ export default function LiveFleetSidebar({
         </button>
         <div className="mt-8 [writing-mode:vertical-lr] text-[10px] font-bold text-tactical-muted uppercase tracking-widest flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>FLEET DIRECTORY ({vessels.length})</span>
+          <span>FLEET DIRECTORY ({vessels.length.toLocaleString()})</span>
         </div>
       </div>
     );
@@ -120,7 +119,7 @@ export default function LiveFleetSidebar({
           <Search className="w-3.5 h-3.5 text-tactical-dim mr-1.5" />
           <input
             type="text"
-            placeholder="FILTER FLEET..."
+            placeholder={`SEARCH ${vessels.length.toLocaleString()} VESSELS...`}
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
             className="bg-transparent text-[11px] text-tactical-text outline-none placeholder:text-tactical-dim/70 w-full"
@@ -249,9 +248,19 @@ export default function LiveFleetSidebar({
       </div>
 
       {/* Bottom Status Footer */}
-      <div className="p-2.5 border-t border-tactical-border bg-white/70 flex items-center justify-between text-[10px] text-tactical-dim">
-        <span>TRACKING: <strong className="text-tactical-text">{vessels.length}</strong></span>
-        <span className="text-emerald-600 font-bold">● AISSTREAM ACTIVE</span>
+      <div className="p-2.5 border-t border-tactical-border bg-white/70 flex flex-col gap-1 text-[10px] text-tactical-dim">
+        <div className="flex items-center justify-between">
+          <span>TRACKING: <strong className="text-tactical-text font-bold text-xs">{vessels.length.toLocaleString()}</strong></span>
+          <span className="text-emerald-600 font-bold flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            AISSTREAM LIVE
+          </span>
+        </div>
+        {filteredVessels.length > displayVessels.length && (
+          <div className="text-[9px] text-tactical-muted">
+            Showing {displayVessels.length} of {filteredVessels.length.toLocaleString()} (search to refine)
+          </div>
+        )}
       </div>
     </aside>
   );
