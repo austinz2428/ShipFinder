@@ -70,7 +70,7 @@ export default function TopBar({
 
         {/* Tactical Breadcrumbs */}
         <div className="flex items-center gap-1 font-medium tracking-tight text-[11px] text-tactical-text">
-          <span className="text-tactical-muted">Chokepoint Watch</span>
+          <span className="font-semibold text-tactical-orange">ShipFinder 3D Fairway</span>
           <span className="text-tactical-dim">/</span>
           <span className="text-tactical-muted">{selectedVessel?.strait || 'Waterway Sector'}</span>
           <span className="text-tactical-dim">/</span>

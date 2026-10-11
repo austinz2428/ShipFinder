@@ -1,4 +1,4 @@
-# 🚢 ShipFinder // Tactical Maritime Intelligence & 3D Topographical Fairway
+# 🚢 ShipFinder 3D Fairway
 
 A sleek, modern maritime vessel tracker and 3D topographical simulator featuring live AIS ingestion, an authentic global fleet, the **Top 20 Largest Great Lakes super-carriers**, interactive telemetry in feet, and real-time 3D topographical visualization with custom vessel models.
 
