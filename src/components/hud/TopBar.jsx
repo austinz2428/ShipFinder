@@ -55,12 +55,17 @@ export default function TopBar({
   }, []);
 
   const filteredVessels = searchQuery.trim()
-    ? allVessels.filter(v =>
-        v.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        String(v.mmsi).includes(searchQuery) ||
-        String(v.imo || '').includes(searchQuery) ||
-        v.type?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+    ? allVessels.filter(v => {
+        const q = searchQuery.toLowerCase();
+        return (
+          v.name?.toLowerCase().includes(q) ||
+          String(v.mmsi).includes(q) ||
+          String(v.imo || '').includes(q) ||
+          v.type?.toLowerCase().includes(q) ||
+          v.flag?.toLowerCase().includes(q) ||
+          v.lake?.toLowerCase().includes(q)
+        );
+      })
     : [];
 
   return (
@@ -128,21 +133,25 @@ export default function TopBar({
             <Search className="w-3 h-3 text-tactical-dim mr-1.5" />
             <input
               type="text"
-              placeholder="SEARCH..."
+              placeholder={`SEARCH ${allVessels.length.toLocaleString()}...`}
               value={searchQuery}
               onChange={(e) => {
                 onSearchChange(e.target.value);
                 setShowSearchDropdown(true);
               }}
               onFocus={() => setShowSearchDropdown(true)}
-              className="bg-transparent text-[11px] text-tactical-text outline-none placeholder:text-tactical-dim/70 w-28 focus:w-40 transition-all"
+              className="bg-transparent text-[11px] text-tactical-text outline-none placeholder:text-tactical-dim/70 w-32 focus:w-48 transition-all"
             />
           </div>
 
           {/* Search Results Dropdown */}
           {showSearchDropdown && filteredVessels.length > 0 && (
-            <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-tactical-border shadow-xl rounded z-50 max-h-60 overflow-y-auto">
-              {filteredVessels.slice(0, 8).map(v => (
+            <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-tactical-border shadow-xl rounded z-50 max-h-72 overflow-y-auto">
+              <div className="px-3 py-1.5 bg-[#f4f5f7] border-b border-tactical-border text-[10px] text-tactical-dim font-bold flex justify-between">
+                <span>FOUND {filteredVessels.length.toLocaleString()} VESSELS</span>
+                <span>SHOWING {Math.min(25, filteredVessels.length)}</span>
+              </div>
+              {filteredVessels.slice(0, 25).map(v => (
                 <div
                   key={v.mmsi}
                   onClick={() => {
@@ -153,12 +162,12 @@ export default function TopBar({
                   className="px-3 py-2 border-b border-gray-100 hover:bg-tactical-orangeSoft cursor-pointer flex flex-col gap-0.5 transition-colors"
                 >
                   <div className="flex justify-between items-center">
-                    <span className="font-semibold text-xs text-tactical-text">{v.name}</span>
-                    <span className="text-[10px] text-tactical-orange font-mono">{v.sog} KN</span>
+                    <span className="font-semibold text-xs text-tactical-text truncate max-w-[170px]">{v.name}</span>
+                    <span className="text-[10px] text-tactical-orange font-mono font-bold">{v.sog} KN</span>
                   </div>
                   <div className="text-[10px] text-tactical-muted flex justify-between">
                     <span>{v.type}</span>
-                    <span>MMSI: {v.mmsi}</span>
+                    <span>{v.flag || v.lake || `MMSI: ${v.mmsi}`}</span>
                   </div>
                 </div>
               ))}
