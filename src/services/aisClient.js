@@ -159,6 +159,7 @@ class AISClientService {
     try {
       console.log('[AISClient] Connecting directly to live AISStream worldwide feed...');
       this.ws = new WebSocket(AISSTREAM_URL);
+      this.ws.binaryType = 'arraybuffer';
 
       this.ws.onopen = () => {
         console.log('[AISClient] Connected to AISStream.io! Subscribing to worldwide fleet...');
@@ -175,9 +176,20 @@ class AISClientService {
         this.scheduleBatchNotify();
       };
 
-      this.ws.onmessage = (event) => {
+      this.ws.onmessage = async (event) => {
         try {
-          const data = JSON.parse(event.data);
+          let text;
+          if (typeof event.data === 'string') {
+            text = event.data;
+          } else if (event.data instanceof ArrayBuffer) {
+            text = new TextDecoder('utf-8').decode(event.data);
+          } else if (event.data && typeof event.data.text === 'function') {
+            text = await event.data.text();
+          } else {
+            return;
+          }
+
+          const data = JSON.parse(text);
           if (data.MessageType === 'SubscriptionConfirmation') {
             console.log('[AISClient] AISStream Subscription Confirmed. Live ingest active!');
             return;
@@ -423,10 +435,29 @@ class AISClientService {
   }
 
   async fetchInitialSnapshot() {
-    if (!this.isLocalHost()) return;
+    // 1. On localhost, query the live Python AIS backend proxy if running
+    if (this.isLocalHost()) {
+      try {
+        const host = window.location.hostname || 'localhost';
+        const res = await fetch(`http://${host}:8080/api/vessels`);
+        if (res.ok) {
+          const vessels = await res.json();
+          vessels.forEach(v => {
+            if (v && v.mmsi) {
+              this.vessels.set(v.mmsi, v);
+            }
+          });
+          this.hasPendingUpdates = true;
+          this.scheduleBatchNotify();
+          return;
+        }
+      } catch (e) {}
+    }
+
+    // 2. On static hosting (GitHub Pages) or if local server is not running:
+    // Load pre-bundled live global fleet snapshot containing 20,000+ real AIS vessels
     try {
-      const host = window.location.hostname || 'localhost';
-      const res = await fetch(`http://${host}:8080/api/vessels`);
+      const res = await fetch('./fleet_snapshot.json');
       if (res.ok) {
         const vessels = await res.json();
         vessels.forEach(v => {
@@ -437,7 +468,9 @@ class AISClientService {
         this.hasPendingUpdates = true;
         this.scheduleBatchNotify();
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[AISClient] Could not load fleet_snapshot.json:', e);
+    }
   }
 }
 
