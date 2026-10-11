@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #e9eaec;
+    color: #111317;
+    font-family: 'JetBrains Mono', monospace;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Tactical hatched texture divider like in reference screenshot */
+.hatched-pattern {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 4px,
+    rgba(180, 185, 195, 0.45) 4px,
+    rgba(180, 185, 195, 0.45) 6px
+  );
+}
+
+.hatched-pattern-subtle {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 3px,
+    rgba(200, 205, 215, 0.3) 3px,
+    rgba(200, 205, 215, 0.3) 5px
+  );
+}
+
+/* Custom technical tactical scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #e9eaec;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #bcc1cb;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #ff4d15;
+}
+
+/* Tactical reticle pulse animation */
+@keyframes ping-slow {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 0.2; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.animate-ping-slow {
+  animation: ping-slow 3s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
