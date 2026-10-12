@@ -328,21 +328,41 @@ async def aisstream_consumer():
 
 # Periodic dead-reckoning movement simulation for active fleet
 async def fleet_simulation_loop():
+    last_sim = time.time()
     while True:
-        await asyncio.sleep(1.2)
+        await asyncio.sleep(1.0)
+        now = time.time()
+        dt = min(2.5, max(0.5, now - last_sim))
+        last_sim = now
         batch = []
-        for mmsi, v in list(vessels_db.items())[:200]:
+
+        for mmsi, v in list(vessels_db.items()):
             sog = v.get("sog", 0)
-            if sog > 0.5:
-                hdg_rad = math.radians(v.get("heading", 0))
-                dist_deg = (sog * (1.2 / 3600.0)) / 60.0
-                v["lat"] = round(v["lat"] + dist_deg * math.cos(hdg_rad), 5)
-                v["lon"] = round(v["lon"] + (dist_deg * math.sin(hdg_rad)) / max(0.2, math.cos(math.radians(v["lat"]))), 5)
+            if sog >= 0.5:
+                hdg = v.get("heading") if v.get("heading", 511) != 511 else v.get("cog", 0)
+                hdg_rad = math.radians(hdg)
+                dist_nm = (sog / 3600.0) * dt
+                dist_deg = dist_nm / 60.0
+
+                new_lat = round(v["lat"] + dist_deg * math.cos(hdg_rad), 5)
+                cos_lat = max(0.2, math.cos(math.radians(new_lat)))
+                new_lon = round(v["lon"] + (dist_deg * math.sin(hdg_rad)) / cos_lat, 5)
+
+                v["lat"] = new_lat
+                v["lon"] = new_lon
+                v["last_updated"] = now
+
+                # Update recent track
+                track = v.get("track", [])
+                if not track or math.hypot(new_lat - track[-1][0], new_lon - track[-1][1]) > 0.0004:
+                    track.append([new_lat, new_lon])
+                    if len(track) > 25:
+                        track.pop(0)
+                v["track"] = track
                 batch.append(v)
 
         if batch and connected_clients:
-            # Broadcast sample batch
-            sample = random.sample(batch, min(12, len(batch)))
+            sample = random.sample(batch, min(24, len(batch)))
             for v in sample:
                 await broadcast_to_clients({"type": "VESSEL_UPDATE", "vessel": v})
 

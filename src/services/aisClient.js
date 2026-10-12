@@ -229,8 +229,6 @@ class AISClientService {
     const now = Date.now();
 
     let name = (meta.ShipName ? meta.ShipName.trim().replace(/^@+/, '') : '') || v?.name || `VESSEL-${mmsi}`;
-    let lat = meta.latitude !== undefined ? meta.latitude : (v?.lat ?? 0);
-    let lon = meta.longitude !== undefined ? meta.longitude : (v?.lon ?? 0);
     let sog = v?.sog ?? 0;
     let cog = v?.cog ?? 0;
     let heading = v?.heading ?? (v?.cog ?? 0);
@@ -242,18 +240,22 @@ class AISClientService {
     let width = v?.width ?? 28;
     let destination = v?.destination ?? 'EN ROUTE';
 
+    // 1. Position Extraction: Prioritize dedicated PositionReport objects
+    let newLat = null;
+    let newLon = null;
+
     if (msgType === 'PositionReport' && msg.PositionReport) {
       const pr = msg.PositionReport;
-      if (typeof pr.Latitude === 'number') lat = pr.Latitude;
-      if (typeof pr.Longitude === 'number') lon = pr.Longitude;
+      if (typeof pr.Latitude === 'number') newLat = pr.Latitude;
+      if (typeof pr.Longitude === 'number') newLon = pr.Longitude;
       if (typeof pr.Sog === 'number') sog = Math.round(pr.Sog * 10) / 10;
       if (typeof pr.Cog === 'number') cog = Math.round(pr.Cog * 10) / 10;
       if (typeof pr.TrueHeading === 'number' && pr.TrueHeading !== 511) heading = pr.TrueHeading;
       else heading = cog;
     } else if (msgType === 'StandardClassBPositionReport' && msg.StandardClassBPositionReport) {
       const pr = msg.StandardClassBPositionReport;
-      if (typeof pr.Latitude === 'number') lat = pr.Latitude;
-      if (typeof pr.Longitude === 'number') lon = pr.Longitude;
+      if (typeof pr.Latitude === 'number') newLat = pr.Latitude;
+      if (typeof pr.Longitude === 'number') newLon = pr.Longitude;
       if (typeof pr.Sog === 'number') sog = Math.round(pr.Sog * 10) / 10;
       if (typeof pr.Cog === 'number') cog = Math.round(pr.Cog * 10) / 10;
       if (typeof pr.TrueHeading === 'number' && pr.TrueHeading !== 511) heading = pr.TrueHeading;
@@ -261,8 +263,8 @@ class AISClientService {
       if (isNew) type = 'Pleasure Craft';
     } else if (msgType === 'ExtendedClassBPositionReport' && msg.ExtendedClassBPositionReport) {
       const pr = msg.ExtendedClassBPositionReport;
-      if (typeof pr.Latitude === 'number') lat = pr.Latitude;
-      if (typeof pr.Longitude === 'number') lon = pr.Longitude;
+      if (typeof pr.Latitude === 'number') newLat = pr.Latitude;
+      if (typeof pr.Longitude === 'number') newLon = pr.Longitude;
       if (typeof pr.Sog === 'number') sog = Math.round(pr.Sog * 10) / 10;
       if (typeof pr.Cog === 'number') cog = Math.round(pr.Cog * 10) / 10;
       if (typeof pr.TrueHeading === 'number' && pr.TrueHeading !== 511) heading = pr.TrueHeading;
@@ -313,12 +315,34 @@ class AISClientService {
       }
     }
 
-    // Coordinates sanity check
-    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
+    // 2. Fallback to MetaData coordinates if position was not in message body
+    if (newLat === null && typeof meta.latitude === 'number' && Math.abs(meta.latitude) > 0.001) {
+      newLat = meta.latitude;
+    }
+    if (newLon === null && typeof meta.longitude === 'number' && Math.abs(meta.longitude) > 0.001) {
+      newLon = meta.longitude;
+    }
+
+    // Determine final coordinates: use new if valid, otherwise preserve known position
+    const lat = (newLat !== null && !isNaN(newLat)) ? newLat : (v?.lat ?? null);
+    const lon = (newLon !== null && !isNaN(newLon)) ? newLon : (v?.lon ?? null);
+
+    // Sanity check coordinates
+    if (lat === null || lon === null || lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
     if (Math.abs(lat) < 0.001 && Math.abs(lon) < 0.001) return;
 
     const { strait, lake } = detectStraitOrLake(lat, lon);
     const flag = v?.flag || getCountryFromMMSI(mmsi);
+
+    // Maintain recent navigation track
+    const track = v?.track ? [...v.track] : [];
+    if (newLat !== null && newLon !== null) {
+      const lastPoint = track[track.length - 1];
+      if (!lastPoint || Math.hypot(lat - lastPoint[0], lon - lastPoint[1]) > 0.0003) {
+        track.push([Number(lat.toFixed(5)), Number(lon.toFixed(5))]);
+        if (track.length > 35) track.shift();
+      }
+    }
 
     const updatedVessel = {
       ...(v || {}),
@@ -344,6 +368,7 @@ class AISClientService {
       ais_status: 'LIVE',
       score: v?.score || Math.floor(75 + Math.random() * 25),
       last_updated: now,
+      track,
       streamed: true
     };
 
@@ -407,23 +432,59 @@ class AISClientService {
 
   startLiveSimulation() {
     if (this.simInterval) return;
-    // Continuous dead-reckoning engine advances moving vessels smoothly between AIS broadcasts
+    this.lastSimTime = Date.now();
+
+    // High-precision nautical dead-reckoning engine:
+    // Advances every vessel underway (SOG >= 0.5 kn) forward in real-time between AIS broadcasts
     this.simInterval = setInterval(() => {
+      const now = Date.now();
+      const dtSeconds = Math.min(2.5, Math.max(0.5, (now - (this.lastSimTime || now)) / 1000));
+      this.lastSimTime = now;
+
       let changed = false;
-      this.vessels.forEach(v => {
-        if (v.sog && v.sog >= 0.5) {
-          const cogRad = ((v.cog || v.heading || 0) * Math.PI) / 180;
-          const speedFactor = v.sog * 0.000004;
-          v.lat += Math.cos(cogRad) * speedFactor;
-          v.lon += Math.sin(cogRad) * speedFactor;
+
+      for (const [mmsi, v] of this.vessels.entries()) {
+        const sog = v.sog;
+        if (typeof sog === 'number' && sog >= 0.5) {
+          const hdg = typeof v.heading === 'number' && v.heading !== 511
+            ? v.heading
+            : (typeof v.cog === 'number' ? v.cog : 0);
+          const cogRad = (hdg * Math.PI) / 180;
+          const latRad = (v.lat * Math.PI) / 180;
+
+          // Nautical physics: 1 knot = 1 NM / hour = (1/3600) NM / sec
+          // 1 NM = 1 minute of latitude = 1/60 degree
+          const distNm = (sog / 3600) * dtSeconds;
+          const dLat = (distNm / 60) * Math.cos(cogRad);
+          const dLon = (distNm / 60) * Math.sin(cogRad) / Math.max(0.2, Math.cos(latRad));
+
+          const newLat = Number((v.lat + dLat).toFixed(5));
+          const newLon = Number((v.lon + dLon).toFixed(5));
+
+          // Maintain recent track breadcrumbs
+          const track = v.track ? [...v.track] : [];
+          if (track.length === 0 || Math.hypot(newLat - track[track.length - 1][0], newLon - track[track.length - 1][1]) > 0.0004) {
+            track.push([newLat, newLon]);
+            if (track.length > 25) track.shift();
+          }
+
+          // Create new immutable cloned vessel object so React state triggers cleanly
+          this.vessels.set(mmsi, {
+            ...v,
+            lat: newLat,
+            lon: newLon,
+            track,
+            last_updated: now
+          });
           changed = true;
         }
-      });
+      }
+
       if (changed) {
         this.hasPendingUpdates = true;
         this.scheduleBatchNotify();
       }
-    }, 2500);
+    }, 1000); // 1-second update cycle ensures continuous, smooth live movement
   }
 
   scheduleReconnect() {
@@ -442,34 +503,52 @@ class AISClientService {
         const res = await fetch(`http://${host}:8080/api/vessels`);
         if (res.ok) {
           const vessels = await res.json();
-          vessels.forEach(v => {
-            if (v && v.mmsi) {
-              this.vessels.set(v.mmsi, v);
-            }
-          });
-          this.hasPendingUpdates = true;
-          this.scheduleBatchNotify();
-          return;
+          if (Array.isArray(vessels) && vessels.length > 0) {
+            vessels.forEach(v => {
+              if (v && v.mmsi && !this.vessels.has(v.mmsi)) {
+                this.vessels.set(v.mmsi, v);
+              }
+            });
+            this.hasPendingUpdates = true;
+            this.scheduleBatchNotify();
+            return;
+          }
         }
       } catch (e) {}
     }
 
     // 2. On static hosting (GitHub Pages) or if local server is not running:
     // Load pre-bundled live global fleet snapshot containing 20,000+ real AIS vessels
-    try {
-      const res = await fetch('./fleet_snapshot.json');
-      if (res.ok) {
-        const vessels = await res.json();
-        vessels.forEach(v => {
-          if (v && v.mmsi) {
-            this.vessels.set(v.mmsi, v);
+    // Try multiple URL variants to handle GitHub Pages subpath with or without trailing slash
+    const basePath = typeof window !== 'undefined' ? window.location.pathname.replace(/\/+$/, '') : '';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const candidateUrls = [
+      `${origin}${basePath}/fleet_snapshot.json`,
+      './fleet_snapshot.json',
+      '/ShipFinder/fleet_snapshot.json',
+      '/fleet_snapshot.json'
+    ];
+
+    for (const url of candidateUrls) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) {
+          const vessels = await res.json();
+          if (Array.isArray(vessels) && vessels.length > 0) {
+            vessels.forEach(v => {
+              if (v && v.mmsi && !this.vessels.has(v.mmsi)) {
+                this.vessels.set(v.mmsi, { ...v, last_updated: Date.now() });
+              }
+            });
+            console.log(`[AISClient] Successfully loaded ${vessels.length} vessels from ${url}`);
+            this.hasPendingUpdates = true;
+            this.scheduleBatchNotify();
+            return;
           }
-        });
-        this.hasPendingUpdates = true;
-        this.scheduleBatchNotify();
+        }
+      } catch (e) {
+        // Try next candidate
       }
-    } catch (e) {
-      console.warn('[AISClient] Could not load fleet_snapshot.json:', e);
     }
   }
 }

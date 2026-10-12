@@ -124,28 +124,35 @@ export default function VesselDetailDrawer({
                 {statusText}
               </span>
             </div>
-            <span className="text-[9px] text-slate-400">
-              LIVE AIS STREAM
-            </span>
+            <div className="flex items-center gap-1.5 text-[9px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>LIVE AIS FIX · JUST NOW</span>
+            </div>
           </div>
 
           {/* Coordinates Grid */}
           <div className="grid grid-cols-2 gap-2 bg-black/40 p-2.5 rounded border border-white/5">
             <div className="flex flex-col">
-              <span className="text-[9px] text-slate-400 font-bold tracking-wider">LATITUDE</span>
+              <div className="flex items-center justify-between text-[9px] text-slate-400 font-bold tracking-wider">
+                <span>LATITUDE</span>
+                <span className="text-[8px] text-emerald-500/80">±1.2m</span>
+              </div>
               <span className="text-sm font-bold text-white tracking-wide">
-                {lat.toFixed(5)}° N
+                {Math.abs(lat).toFixed(5)}° {lat >= 0 ? 'N' : 'S'}
               </span>
-              <span className="text-[9px] text-slate-500">
+              <span className="text-[9px] text-slate-400">
                 {toDMS(lat, true)}
               </span>
             </div>
             <div className="flex flex-col border-l border-white/10 pl-2.5">
-              <span className="text-[9px] text-slate-400 font-bold tracking-wider">LONGITUDE</span>
+              <div className="flex items-center justify-between text-[9px] text-slate-400 font-bold tracking-wider">
+                <span>LONGITUDE</span>
+                <span className="text-[8px] text-emerald-500/80">WGS-84</span>
+              </div>
               <span className="text-sm font-bold text-white tracking-wide">
                 {Math.abs(lon).toFixed(5)}° {lon >= 0 ? 'E' : 'W'}
               </span>
-              <span className="text-[9px] text-slate-500">
+              <span className="text-[9px] text-slate-400">
                 {toDMS(lon, false)}
               </span>
             </div>
@@ -170,7 +177,7 @@ export default function VesselDetailDrawer({
             </div>
 
             <div className="text-right flex flex-col">
-              <span className="text-[9px] text-slate-400 font-bold">SPEED</span>
+              <span className="text-[9px] text-slate-400 font-bold">SPEED OVER GROUND</span>
               <span className="text-sm font-bold text-emerald-400">
                 {sog} KN <span className="text-[9px] text-slate-400 font-normal">({(sog * 1.852).toFixed(1)} km/h)</span>
               </span>

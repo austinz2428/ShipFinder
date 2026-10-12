@@ -15,6 +15,7 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [latency, setLatency] = useState(82);
   const [searchQuery, setSearchQuery] = useState('');
+  const [centerTarget, setCenterTarget] = useState(null);
 
   const [layers, setLayers] = useState({
     tracks: true,
@@ -38,14 +39,14 @@ export default function App() {
         setLatency(data.latency);
       }
 
-      // If no selected vessel yet, default to SAM LAUD
+      // If selected vessel exists, update it with fresh telemetry; default to SAM LAUD
       setSelectedVessel((prev) => {
         if (prev) {
           const updated = data.vessels.find((v) => v.mmsi === prev.mmsi);
-          return updated || prev;
+          return updated ? { ...updated } : prev;
         }
         const samLaud = data.vessels.find((v) => v.name?.includes('SAM LAUD'));
-        return samLaud || data.vessels[0] || null;
+        return samLaud ? { ...samLaud } : (data.vessels[0] ? { ...data.vessels[0] } : null);
       });
     });
 
@@ -55,6 +56,16 @@ export default function App() {
   const handleSelectVessel = (vessel) => {
     setSelectedVessel(vessel);
     setShowDrawer(true);
+    if (vessel && typeof vessel.lat === 'number') {
+      setCenterTarget({ lat: vessel.lat, lon: vessel.lon, zoom: 11, ts: Date.now() });
+    }
+  };
+
+  const handleCenterMap = (vessel) => {
+    if (vessel && typeof vessel.lat === 'number') {
+      setSelectedVessel({ ...vessel });
+      setCenterTarget({ lat: vessel.lat, lon: vessel.lon, zoom: 12, ts: Date.now() });
+    }
   };
 
   const handleSwitchToTopographical = () => {
@@ -104,6 +115,7 @@ export default function App() {
               onSelectVessel={handleSelectVessel}
               onSwitchToTopographical={handleSwitchToTopographical}
               layers={layers}
+              centerTarget={centerTarget}
             />
           ) : (
             <TopographicalView
@@ -122,7 +134,7 @@ export default function App() {
               vessel={selectedVessel}
               onClose={() => setShowDrawer(false)}
               onSwitchToTopographical={handleSwitchToTopographical}
-              onCenterMap={handleSelectVessel}
+              onCenterMap={handleCenterMap}
             />
           )}
         </main>
