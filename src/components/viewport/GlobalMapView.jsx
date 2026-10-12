@@ -52,7 +52,8 @@ export default function GlobalMapView({
   selectedVessel,
   onSelectVessel,
   onSwitchToTopographical,
-  layers = { tracks: true, anchorage: true }
+  layers = { tracks: true, anchorage: true },
+  centerTarget
 }) {
   const mapContainerRef = useRef(null);
   const canvasRef = useRef(null);
@@ -114,6 +115,32 @@ export default function GlobalMapView({
       const isMoored = !v.sog || v.sog < 0.6;
       const heading = (v.heading || v.cog || 0);
 
+      // 1. Draw AIS Historical Track Breadcrumbs (Selected or when tracks layer is on)
+      if (v.track && v.track.length > 1 && (isSelected || layers.tracks)) {
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i < v.track.length; i++) {
+          const pt = v.track[i];
+          if (Array.isArray(pt) && typeof pt[0] === 'number' && typeof pt[1] === 'number') {
+            const screenPt = map.latLngToContainerPoint(pt);
+            if (!started) {
+              ctx.moveTo(screenPt.x, screenPt.y);
+              started = true;
+            } else {
+              ctx.lineTo(screenPt.x, screenPt.y);
+            }
+          }
+        }
+        if (started) {
+          ctx.strokeStyle = isSelected ? '#ff4d15' : 'rgba(100, 116, 139, 0.4)';
+          ctx.lineWidth = isSelected ? 2.5 : 1.2;
+          ctx.setLineDash(isSelected ? [4, 4] : [2, 3]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+
+      // 2. Draw Vessel Marker
       if (isMoored) {
         // Moored / At Anchor Circle
         ctx.beginPath();
@@ -124,6 +151,19 @@ export default function GlobalMapView({
         ctx.lineWidth = 1.0;
         ctx.stroke();
       } else {
+        // Heading / Velocity Leader Vector Line (ECDIS style)
+        const vectorLen = Math.min(36, Math.max(12, v.sog * 1.6 * scaleFactor));
+        const rad = ((heading - 90) * Math.PI) / 180;
+        const vx = point.x + Math.cos(rad) * vectorLen;
+        const vy = point.y + Math.sin(rad) * vectorLen;
+
+        ctx.beginPath();
+        ctx.moveTo(point.x, point.y);
+        ctx.lineTo(vx, vy);
+        ctx.strokeStyle = isSelected ? '#ff4d15' : color;
+        ctx.lineWidth = isSelected ? 2.0 : 1.2;
+        ctx.stroke();
+
         // Moving Directional Chevron
         ctx.save();
         ctx.translate(point.x, point.y);
@@ -148,13 +188,22 @@ export default function GlobalMapView({
         ctx.restore();
       }
 
-      // If Selected: Draw Tactical Targeting Brackets & Label
+      // 3. If Selected: Draw Pulsing Tactical Beacon Ring, Corner Reticle Brackets, & Live Telemetry Box
       if (isSelected) {
-        const boxSize = 14 * scaleFactor;
+        // Pulsing radar ring
+        const pulse = (Date.now() % 1600) / 1600;
+        const pulseR = 14 * scaleFactor + pulse * 22 * scaleFactor;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, pulseR, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 77, 21, ${0.9 * (1 - pulse)})`;
+        ctx.lineWidth = 2.0;
+        ctx.stroke();
+
+        const boxSize = 15 * scaleFactor;
 
         // Red/Orange Corner Reticle Brackets [ ]
         ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 2.0;
+        ctx.lineWidth = 2.2;
 
         // Top-Left Corner
         ctx.beginPath();
@@ -184,36 +233,44 @@ export default function GlobalMapView({
         ctx.lineTo(point.x + boxSize, point.y + boxSize - 6);
         ctx.stroke();
 
-        // Popup Tag Box: e.g. "SAM LAUD" / "just now"
-        const labelX = point.x + boxSize + 6;
-        const labelY = point.y - boxSize + 2;
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        ctx.strokeStyle = '#cbd5e1';
-        ctx.lineWidth = 1.0;
+        // Popup Tag Box with Live Coordinates & Speed
+        const labelX = point.x + boxSize + 8;
+        const labelY = point.y - boxSize - 4;
 
         const text1 = v.name || 'VESSEL';
-        const text2 = 'just now';
+        const text2 = `${v.sog || 0} KN · ${Math.round(heading)}°T`;
+        const latStr = `${Math.abs(v.lat).toFixed(4)}°${v.lat >= 0 ? 'N' : 'S'}`;
+        const lonStr = `${Math.abs(v.lon).toFixed(4)}°${v.lon >= 0 ? 'E' : 'W'}`;
+        const text3 = `${latStr}, ${lonStr}`;
 
         ctx.font = 'bold 11px JetBrains Mono, monospace';
         const tWidth1 = ctx.measureText(text1).width;
         ctx.font = '9px JetBrains Mono, monospace';
         const tWidth2 = ctx.measureText(text2).width;
-        const boxW = Math.max(tWidth1, tWidth2) + 16;
-        const boxH = 32;
+        const tWidth3 = ctx.measureText(text3).width;
+        const boxW = Math.max(tWidth1, tWidth2, tWidth3) + 16;
+        const boxH = 46;
 
-        ctx.fillRect(labelX, labelY - 4, boxW, boxH);
-        ctx.strokeRect(labelX, labelY - 4, boxW, boxH);
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+        ctx.strokeStyle = '#ff4d15';
+        ctx.lineWidth = 1.2;
+        ctx.fillRect(labelX, labelY, boxW, boxH);
+        ctx.strokeRect(labelX, labelY, boxW, boxH);
 
         // Vessel Name
-        ctx.fillStyle = '#0f172a';
+        ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 11px JetBrains Mono, monospace';
-        ctx.fillText(text1, labelX + 8, labelY + 11);
+        ctx.fillText(text1, labelX + 8, labelY + 14);
 
-        // "just now"
-        ctx.fillStyle = '#64748b';
+        // Speed & Heading
+        ctx.fillStyle = '#34d399';
+        ctx.font = 'bold 9px JetBrains Mono, monospace';
+        ctx.fillText(text2, labelX + 8, labelY + 27);
+
+        // Live GPS Coordinates
+        ctx.fillStyle = '#94a3b8';
         ctx.font = '9px JetBrains Mono, monospace';
-        ctx.fillText(text2, labelX + 8, labelY + 23);
+        ctx.fillText(text3, labelX + 8, labelY + 39);
       }
     });
   }, [filterType]);
@@ -323,8 +380,18 @@ export default function GlobalMapView({
 
   // Update canvas whenever vessels or selectedVessel changes
   useEffect(() => {
+    vesselsRef.current = vessels;
+    selectedVesselRef.current = selectedVessel;
     renderCanvas();
   }, [vessels, selectedVessel, renderCanvas]);
+
+  // Continuous live redraw interval ensuring smooth ship motion on the map
+  useEffect(() => {
+    const timer = setInterval(() => {
+      renderCanvas();
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [renderCanvas]);
 
   // Handle Tile Style changes
   useEffect(() => {
@@ -336,16 +403,33 @@ export default function GlobalMapView({
     }).addTo(mapInstanceRef.current);
   }, [mapStyleKey]);
 
-  // Center on selected vessel when changed externally
+  // Track previous selected vessel MMSI to only auto-fly on new selection
+  const lastSelectedMmsiRef = useRef(null);
+
+  // Smoothly center on selected vessel when changed externally (sidebar, directory, search)
   useEffect(() => {
-    if (selectedVessel && mapInstanceRef.current) {
-      const currentCenter = mapInstanceRef.current.getCenter();
-      const dist = Math.hypot(currentCenter.lat - selectedVessel.lat, currentCenter.lng - selectedVessel.lon);
-      if (dist > 8.0) {
-        mapInstanceRef.current.panTo([selectedVessel.lat, selectedVessel.lon], { animate: true, duration: 0.8 });
+    if (selectedVessel && mapInstanceRef.current && typeof selectedVessel.lat === 'number') {
+      if (lastSelectedMmsiRef.current !== selectedVessel.mmsi) {
+        lastSelectedMmsiRef.current = selectedVessel.mmsi;
+        mapInstanceRef.current.flyTo(
+          [selectedVessel.lat, selectedVessel.lon],
+          Math.max(mapInstanceRef.current.getZoom(), 10),
+          { duration: 1.0 }
+        );
       }
     }
   }, [selectedVessel]);
+
+  // Center when user explicitly clicks "CENTER ON MAP"
+  useEffect(() => {
+    if (centerTarget && mapInstanceRef.current && typeof centerTarget.lat === 'number') {
+      mapInstanceRef.current.flyTo(
+        [centerTarget.lat, centerTarget.lon],
+        centerTarget.zoom || Math.max(mapInstanceRef.current.getZoom(), 11),
+        { duration: 0.9 }
+      );
+    }
+  }, [centerTarget]);
 
   // Jump to Pre-defined Strategic Maritime Corridors
   const handleJumpToSector = (sector) => {

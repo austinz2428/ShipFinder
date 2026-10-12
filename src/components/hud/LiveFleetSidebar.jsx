@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Search, ChevronLeft, ChevronRight, Anchor, Navigation, Radio, Filter } from 'lucide-react';
 
 const TYPE_COLORS = {
@@ -44,34 +44,34 @@ export default function LiveFleetSidebar({
     );
   };
 
-  let processedVessels = vessels;
-  if (selectedType === 'GREAT_LAKES') {
-    processedVessels = [...vessels]
-      .filter(isGreatLakes)
-      .sort((a, b) => (b.length || 0) - (a.length || 0));
-  } else if (selectedType !== 'ALL') {
-    processedVessels = vessels.filter((v) => {
-      const t = (v.type || '').toLowerCase();
-      if (selectedType === 'CARGO' && !t.includes('cargo') && !t.includes('carrier')) return false;
-      if (selectedType === 'TANKER' && !t.includes('tanker')) return false;
-      if (selectedType === 'TUG' && !t.includes('tug') && !t.includes('tow')) return false;
-      if (selectedType === 'YACHT' && !t.includes('pleasure') && !t.includes('yacht')) return false;
-      if (selectedType === 'FISHING' && !t.includes('fish') && !t.includes('trawl')) return false;
-      return true;
-    });
-  }
+  const filteredVessels = useMemo(() => {
+    let list = vessels;
+    if (selectedType === 'GREAT_LAKES') {
+      list = [...vessels]
+        .filter(isGreatLakes)
+        .sort((a, b) => (b.length || 0) - (a.length || 0));
+    } else if (selectedType !== 'ALL') {
+      list = vessels.filter((v) => {
+        const t = (v.type || '').toLowerCase();
+        if (selectedType === 'CARGO' && !t.includes('cargo') && !t.includes('carrier')) return false;
+        if (selectedType === 'TANKER' && !t.includes('tanker')) return false;
+        if (selectedType === 'TUG' && !t.includes('tug') && !t.includes('tow')) return false;
+        if (selectedType === 'YACHT' && !t.includes('pleasure') && !t.includes('yacht')) return false;
+        if (selectedType === 'FISHING' && !t.includes('fish') && !t.includes('trawl')) return false;
+        return true;
+      });
+    }
 
-  const filteredVessels = processedVessels.filter((v) => {
-    if (!filterQuery.trim()) return true;
+    if (!filterQuery.trim()) return list;
     const q = filterQuery.toLowerCase();
-    return (
+    return list.filter((v) =>
       v.name?.toLowerCase().includes(q) ||
       String(v.mmsi).includes(q) ||
       String(v.imo || '').includes(q) ||
       v.type?.toLowerCase().includes(q) ||
       v.lake?.toLowerCase().includes(q)
     );
-  });
+  }, [vessels, selectedType, filterQuery]);
 
   const displayLimit = selectedType === 'GREAT_LAKES' ? 20 : (filterQuery ? 350 : 200);
   const displayVessels = filteredVessels.slice(0, displayLimit);
