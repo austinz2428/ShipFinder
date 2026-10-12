@@ -42,41 +42,36 @@ npm run dev
 ```
 Open **[http://localhost:5173](http://localhost:5173)** in your browser.
 
-### 3. (Optional) Run the Live AISStream Backend Proxy
-To ingest real-time worldwide WebSocket data from `aisstream.io`:
+### 3. (Optional) Run the Live AISStream Backend Proxy Locally
+To ingest real-time worldwide WebSocket data from `aisstream.io` locally:
 ```bash
-pip install aiohttp websockets
+pip install -r requirements.txt
 python server.py
 ```
-*(The frontend automatically connects to `ws://localhost:8080/ws` when running locally, and falls back to autonomous simulation when hosted on static hosts).*
+
+---
+
+## ⚡ Automated Scheduled Ingest (Cron every 15 mins)
+
+The repository includes a serverless GitHub Actions workflow ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)):
+1. **Runs every 15 minutes** on a scheduled cron trigger (and on manual trigger / git push).
+2. Runs [`scripts/update_ais.py`](scripts/update_ais.py) using your private `AISSTREAM_API_KEY` stored securely in GitHub Secrets.
+3. Listens to AISStream for 40 seconds to collect real-time vessel updates worldwide.
+4. Generates static `public/vessels.json` and `public/vessels.geojson`, commits the dataset with `[skip ci]`, and deploys to GitHub Pages.
+5. The frontend loads `fetch('./vessels.json')` without exposing any API keys to web visitors.
+
+### 🔑 Adding Your API Key to GitHub Secrets:
+1. Go to `Settings` → `Secrets and variables` → `Actions` → `New repository secret`.
+2. Name: `AISSTREAM_API_KEY`.
+3. Secret: Paste your private API key from `aisstream.io`.
 
 ---
 
 ## 📦 How to Deploy to GitHub Pages
 
-### Step 1: Initialize Git and Commit
-```bash
-git init
-git add .
-git commit -m "Initial commit: ShipFinder tactical maritime intelligence"
-```
-
-### Step 2: Push to Your GitHub Repository
-Create a new repository on [GitHub](https://github.com/new) named `ShipFinder`, then run:
-```bash
-git remote add origin https://github.com/<YOUR_USERNAME>/ShipFinder.git
-git branch -M main
-git push -u origin main
-```
-
-### Step 3: Enable GitHub Pages
 1. Go to your repository on GitHub: `Settings` → `Pages`.
-2. Under **Build and deployment** → **Source**, select:
-   - **`GitHub Actions`** (Recommended - uses the included `.github/workflows/deploy.yml` to automatically build and deploy on every push).
-3. Within 1–2 minutes, your live site will be published at:
-   ```
-   https://<YOUR_USERNAME>.github.io/ShipFinder/
-   ```
+2. Under **Build and deployment** → **Source**, select **`GitHub Actions`**.
+3. Live site: **`https://<YOUR_USERNAME>.github.io/ShipFinder/`**
 
 ---
 
