@@ -30,10 +30,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
       - name: Install Python dependencies
-        run: pip install websockets
+        run: pip install -r requirements.txt
 
       - name: Ingest live positions from AISStream (35-45s listen)
         env:
