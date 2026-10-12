@@ -1,95 +1,19 @@
 import { INITIAL_VESSELS, INITIAL_ALERTS } from '../data/mockVessels';
 
-const AISSTREAM_URL = 'wss://stream.aisstream.io/v0/stream';
-const AISSTREAM_API_KEY = '484c88f1a086340afa5fb60ee9e90163176b739c';
-
-// ITU Maritime Identification Digits (MID) to Country mapping
-function getCountryFromMMSI(mmsi) {
-  if (!mmsi) return 'International';
-  const mid = parseInt(String(mmsi).slice(0, 3), 10);
-  if (mid >= 366 && mid <= 369) return 'USA';
-  if (mid === 303 || mid === 338 || mid === 367 || mid === 368) return 'USA';
-  if (mid === 316) return 'Canada';
-  if (mid >= 351 && mid <= 357) return 'Panama';
-  if (mid === 636) return 'Liberia';
-  if (mid === 538) return 'Marshall Islands';
-  if (mid >= 232 && mid <= 235) return 'United Kingdom';
-  if (mid >= 244 && mid <= 246) return 'Netherlands';
-  if (mid === 257 || mid === 258 || mid === 259) return 'Norway';
-  if (mid >= 211 && mid <= 218) return 'Germany';
-  if (mid >= 226 && mid <= 228) return 'France';
-  if (mid >= 247 && mid <= 249) return 'Italy';
-  if (mid === 271) return 'Turkey';
-  if (mid === 237) return 'Greece';
-  if (mid >= 412 && mid <= 414) return 'China';
-  if (mid >= 431 && mid <= 432) return 'Japan';
-  if (mid === 440 || mid === 441) return 'South Korea';
-  if (mid >= 563 && mid <= 566) return 'Singapore';
-  if (mid === 205) return 'Belgium';
-  if (mid === 219 || mid === 220) return 'Denmark';
-  if (mid === 265 || mid === 266) return 'Sweden';
-  if (mid === 230) return 'Finland';
-  if (mid >= 273 && mid <= 274) return 'Russia';
-  if (mid >= 503 && mid <= 505) return 'Australia';
-  if (mid === 224) return 'Spain';
-  if (mid === 263) return 'Portugal';
-  if (mid === 710) return 'Brazil';
-  if (mid === 345) return 'Mexico';
-  return 'International';
-}
-
-function mapAISStreamType(typeCode) {
-  if (typeCode === undefined || typeCode === null) return 'Commercial Vessel';
-  const c = parseInt(typeCode, 10);
-  if (c === 30) return 'Fishing';
-  if (c === 31 || c === 32 || c === 52) return 'Tug / Tow';
-  if (c === 36 || c === 37) return 'Pleasure Craft';
-  if (c >= 60 && c <= 69) return 'Passenger';
-  if (c >= 70 && c <= 79) return 'Cargo Ship';
-  if (c >= 80 && c <= 89) return 'Tanker';
-  if (c === 50) return 'Pilot Vessel';
-  if (c === 51) return 'Search & Rescue';
-  if (c === 53) return 'Port Tender';
-  if (c === 55) return 'Law Enforcement';
-  if (c === 35) return 'Military Ops';
-  return 'Cargo Ship';
-}
-
-function detectStraitOrLake(lat, lon) {
-  if (typeof lat !== 'number' || typeof lon !== 'number') return { strait: 'High Seas', lake: null };
-  if (lat >= 41.0 && lat <= 49.0 && lon >= -92.5 && lon <= -76.0) {
-    let lake = 'Great Lakes';
-    if (lat > 46.2 && lon < -84.5) lake = 'Lake Superior';
-    else if (lon < -85.0 && lat < 46.0) lake = 'Lake Michigan';
-    else if (lon >= -84.5 && lon <= -80.5 && lat >= 43.0) lake = 'Lake Huron';
-    else if (lat >= 41.3 && lat <= 43.0 && lon >= -83.5 && lon <= -78.8) lake = 'Lake Erie';
-    else if (lat >= 43.2 && lon >= -79.8) lake = 'Lake Ontario';
-    return { strait: 'Great Lakes', lake };
-  }
-  if (lat >= 41.0 && lat <= 41.35 && lon >= 28.9 && lon <= 29.2) return { strait: 'Bosphorus', lake: null };
-  if (lat >= 50.8 && lat <= 51.5 && lon >= 1.0 && lon <= 1.9) return { strait: 'Dover Strait', lake: null };
-  if (lat >= 35.8 && lat <= 36.2 && lon >= -5.8 && lon <= -5.2) return { strait: 'Strait of Gibraltar', lake: null };
-  if (lat >= 1.1 && lat <= 1.5 && lon >= 103.5 && lon <= 104.2) return { strait: 'Strait of Malacca', lake: null };
-  if (lat >= 29.8 && lat <= 31.4 && lon >= 32.2 && lon <= 32.7) return { strait: 'Suez Canal', lake: null };
-  if (lat >= 8.8 && lat <= 9.4 && lon >= -80.0 && lon <= -79.5) return { strait: 'Panama Canal', lake: null };
-  return { strait: 'High Seas', lake: null };
-}
-
 class AISClientService {
   constructor() {
     this.vessels = new Map();
     this.alerts = [...INITIAL_ALERTS];
     this.listeners = new Set();
-    this.connected = false;
-    this.ws = null;
-    this.localWs = null;
-    this.reconnectTimer = null;
-    this.latency = 42;
-    this.streamMessageCount = 0;
+    this.connected = true;
+    this.latency = 28;
+    this.lastSyncTime = null;
+    this.pollInterval = null;
+    this.simInterval = null;
     this.hasPendingUpdates = false;
     this.batchTimer = null;
 
-    // Initialize with comprehensive global fleet
+    // Initialize with baseline vessels
     INITIAL_VESSELS.forEach(v => {
       this.vessels.set(v.mmsi, { ...v, last_updated: Date.now() });
     });
@@ -102,7 +26,7 @@ class AISClientService {
       alerts: this.alerts,
       connected: this.connected,
       latency: this.latency,
-      streamMessageCount: this.streamMessageCount
+      lastSyncTime: this.lastSyncTime
     });
     return () => this.listeners.delete(listener);
   }
@@ -113,7 +37,7 @@ class AISClientService {
       alerts: this.alerts,
       connected: this.connected,
       latency: this.latency,
-      streamMessageCount: this.streamMessageCount
+      lastSyncTime: this.lastSyncTime
     };
     this.listeners.forEach(cb => {
       try {
@@ -132,7 +56,7 @@ class AISClientService {
         this.hasPendingUpdates = false;
         this.notify();
       }
-    }, 350); // 350ms batch dispatch gives smooth 60fps UI while ingesting 50-100 msgs/sec
+    }, 350);
   }
 
   isLocalHost() {
@@ -142,262 +66,83 @@ class AISClientService {
   }
 
   connect() {
-    this.connectDirectAISStream();
+    // 1. Fetch latest static vessels snapshot immediately
+    this.fetchInitialSnapshot();
+
+    // 2. Poll vessels.json periodically (every 60s) to receive updates from GitHub Actions cron
+    if (!this.pollInterval) {
+      this.pollInterval = setInterval(() => {
+        this.pollVessels();
+      }, 60000);
+    }
+
+    // 3. Autonomous dead-reckoning engine moves vessels smoothly in real time between cron updates
     this.startLiveSimulation();
 
-    // If local proxy server is running, also try connecting to it to sync local cache
+    // 4. If running locally with python server.py, sync with local proxy too
     if (this.isLocalHost()) {
       this.connectLocalProxy();
     }
   }
 
-  connectDirectAISStream() {
-    if (this.ws) {
-      try { this.ws.close(); } catch (e) {}
+  async fetchInitialSnapshot() {
+    // Try vessels.json first, then fallback to fleet_snapshot.json or localhost
+    const sources = ['./vessels.json', './fleet_snapshot.json'];
+    if (this.isLocalHost()) {
+      sources.unshift(`http://${window.location.hostname || 'localhost'}:8080/api/vessels`);
     }
 
+    for (const url of sources) {
+      try {
+        const res = await fetch(`${url}?_t=${Date.now()}`);
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data) ? data : (data.vessels || []);
+          if (list.length > 0) {
+            console.log(`[AISClient] Successfully loaded ${list.length.toLocaleString()} vessels from ${url}`);
+            list.forEach(v => {
+              if (v && v.mmsi) {
+                this.vessels.set(v.mmsi, v);
+              }
+            });
+            if (data.last_updated) {
+              this.lastSyncTime = data.last_updated;
+            }
+            this.connected = true;
+            this.latency = Math.floor(Math.random() * 15 + 20);
+            this.hasPendingUpdates = true;
+            this.scheduleBatchNotify();
+            return;
+          }
+        }
+      } catch (e) {
+        // Try next source
+      }
+    }
+  }
+
+  async pollVessels() {
     try {
-      console.log('[AISClient] Connecting directly to live AISStream worldwide feed...');
-      this.ws = new WebSocket(AISSTREAM_URL);
-      this.ws.binaryType = 'arraybuffer';
-
-      this.ws.onopen = () => {
-        console.log('[AISClient] Connected to AISStream.io! Subscribing to worldwide fleet...');
-        this.connected = true;
-        this.latency = Math.floor(Math.random() * 20 + 28);
-
-        // Subscribe to complete global bounding box without message filters to track EVERYTHING
-        const subscription = {
-          APIKey: AISSTREAM_API_KEY,
-          BoundingBoxes: [[[-90, -180], [90, 180]]]
-        };
-        this.ws.send(JSON.stringify(subscription));
-        this.hasPendingUpdates = true;
-        this.scheduleBatchNotify();
-      };
-
-      this.ws.onmessage = async (event) => {
-        try {
-          let text;
-          if (typeof event.data === 'string') {
-            text = event.data;
-          } else if (event.data instanceof ArrayBuffer) {
-            text = new TextDecoder('utf-8').decode(event.data);
-          } else if (event.data && typeof event.data.text === 'function') {
-            text = await event.data.text();
-          } else {
-            return;
+      const res = await fetch(`./vessels.json?_t=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data.vessels || []);
+        if (list.length > 0) {
+          list.forEach(v => {
+            if (v && v.mmsi) {
+              const existing = this.vessels.get(v.mmsi);
+              this.vessels.set(v.mmsi, { ...(existing || {}), ...v });
+            }
+          });
+          if (data.last_updated) {
+            this.lastSyncTime = data.last_updated;
           }
-
-          const data = JSON.parse(text);
-          if (data.MessageType === 'SubscriptionConfirmation') {
-            console.log('[AISClient] AISStream Subscription Confirmed. Live ingest active!');
-            return;
-          }
-          this.handleAISStreamMessage(data);
-        } catch (e) {
-          // Ignore JSON parse blips
-        }
-      };
-
-      this.ws.onclose = () => {
-        console.log('[AISClient] AISStream disconnected. Reconnecting in 4s...');
-        this.connected = false;
-        this.scheduleBatchNotify();
-        this.scheduleReconnect();
-      };
-
-      this.ws.onerror = (err) => {
-        console.warn('[AISClient] AISStream WebSocket connection warning:', err);
-      };
-    } catch (e) {
-      console.error('[AISClient] Error initiating AISStream connection:', e);
-      this.scheduleReconnect();
-    }
-  }
-
-  handleAISStreamMessage(data) {
-    const meta = data.MetaData || {};
-    const mmsi = meta.MMSI ? Number(meta.MMSI) : null;
-    if (!mmsi || isNaN(mmsi) || mmsi <= 0) return;
-
-    const msgType = data.MessageType;
-    const msg = data.Message || {};
-
-    let v = this.vessels.get(mmsi);
-    const isNew = !v;
-    const now = Date.now();
-
-    let name = (meta.ShipName ? meta.ShipName.trim().replace(/^@+/, '') : '') || v?.name || `VESSEL-${mmsi}`;
-    let sog = v?.sog ?? 0;
-    let cog = v?.cog ?? 0;
-    let heading = v?.heading ?? (v?.cog ?? 0);
-    let type = v?.type || 'Commercial Vessel';
-    let imo = v?.imo ?? 0;
-    let callSign = v?.callSign ?? '';
-    let draft = v?.draft ?? 8.5;
-    let length = v?.length ?? 185;
-    let width = v?.width ?? 28;
-    let destination = v?.destination ?? 'EN ROUTE';
-
-    // 1. Position Extraction: Prioritize dedicated PositionReport objects
-    let newLat = null;
-    let newLon = null;
-
-    if (msgType === 'PositionReport' && msg.PositionReport) {
-      const pr = msg.PositionReport;
-      if (typeof pr.Latitude === 'number') newLat = pr.Latitude;
-      if (typeof pr.Longitude === 'number') newLon = pr.Longitude;
-      if (typeof pr.Sog === 'number') sog = Math.round(pr.Sog * 10) / 10;
-      if (typeof pr.Cog === 'number') cog = Math.round(pr.Cog * 10) / 10;
-      if (typeof pr.TrueHeading === 'number' && pr.TrueHeading !== 511) heading = pr.TrueHeading;
-      else heading = cog;
-    } else if (msgType === 'StandardClassBPositionReport' && msg.StandardClassBPositionReport) {
-      const pr = msg.StandardClassBPositionReport;
-      if (typeof pr.Latitude === 'number') newLat = pr.Latitude;
-      if (typeof pr.Longitude === 'number') newLon = pr.Longitude;
-      if (typeof pr.Sog === 'number') sog = Math.round(pr.Sog * 10) / 10;
-      if (typeof pr.Cog === 'number') cog = Math.round(pr.Cog * 10) / 10;
-      if (typeof pr.TrueHeading === 'number' && pr.TrueHeading !== 511) heading = pr.TrueHeading;
-      else heading = cog;
-      if (isNew) type = 'Pleasure Craft';
-    } else if (msgType === 'ExtendedClassBPositionReport' && msg.ExtendedClassBPositionReport) {
-      const pr = msg.ExtendedClassBPositionReport;
-      if (typeof pr.Latitude === 'number') newLat = pr.Latitude;
-      if (typeof pr.Longitude === 'number') newLon = pr.Longitude;
-      if (typeof pr.Sog === 'number') sog = Math.round(pr.Sog * 10) / 10;
-      if (typeof pr.Cog === 'number') cog = Math.round(pr.Cog * 10) / 10;
-      if (typeof pr.TrueHeading === 'number' && pr.TrueHeading !== 511) heading = pr.TrueHeading;
-      else heading = cog;
-      if (pr.ShipName) {
-        const clean = pr.ShipName.trim().replace(/^@+/, '');
-        if (clean) name = clean;
-      }
-      if (pr.Type !== undefined) type = mapAISStreamType(pr.Type);
-      if (pr.Dimension) {
-        const l = (pr.Dimension.A || 0) + (pr.Dimension.B || 0);
-        const w = (pr.Dimension.C || 0) + (pr.Dimension.D || 0);
-        if (l > 0) length = l;
-        if (w > 0) width = w;
-      }
-    } else if (msgType === 'ShipStaticData' && msg.ShipStaticData) {
-      const sd = msg.ShipStaticData;
-      if (sd.Name) {
-        const clean = sd.Name.trim().replace(/^@+/, '');
-        if (clean) name = clean;
-      }
-      if (sd.ImoNumber) imo = sd.ImoNumber;
-      if (sd.CallSign) callSign = sd.CallSign.trim();
-      if (sd.Type !== undefined) type = mapAISStreamType(sd.Type);
-      if (sd.MaximumStaticDraught) draft = Math.round(sd.MaximumStaticDraught * 10) / 10;
-      if (sd.Destination) destination = sd.Destination.trim();
-      if (sd.Dimension) {
-        const l = (sd.Dimension.A || 0) + (sd.Dimension.B || 0);
-        const w = (sd.Dimension.C || 0) + (sd.Dimension.D || 0);
-        if (l > 0) length = l;
-        if (w > 0) width = w;
-      }
-    } else if (msgType === 'StaticDataReport' && msg.StaticDataReport) {
-      const sdr = msg.StaticDataReport;
-      if (sdr.ReportA?.Valid && sdr.ReportA?.ShipName) {
-        const clean = sdr.ReportA.ShipName.trim().replace(/^@+/, '');
-        if (clean) name = clean;
-      }
-      if (sdr.ReportB?.Valid) {
-        if (sdr.ReportB.Type !== undefined) type = mapAISStreamType(sdr.ReportB.Type);
-        if (sdr.ReportB.CallSign) callSign = sdr.ReportB.CallSign.trim();
-        if (sdr.ReportB.Dimension) {
-          const l = (sdr.ReportB.Dimension.A || 0) + (sdr.ReportB.Dimension.B || 0);
-          const w = (sdr.ReportB.Dimension.C || 0) + (sdr.ReportB.Dimension.D || 0);
-          if (l > 0) length = l;
-          if (w > 0) width = w;
+          this.connected = true;
+          this.hasPendingUpdates = true;
+          this.scheduleBatchNotify();
         }
       }
-    }
-
-    // 2. Fallback to MetaData coordinates if position was not in message body
-    if (newLat === null && typeof meta.latitude === 'number' && Math.abs(meta.latitude) > 0.001) {
-      newLat = meta.latitude;
-    }
-    if (newLon === null && typeof meta.longitude === 'number' && Math.abs(meta.longitude) > 0.001) {
-      newLon = meta.longitude;
-    }
-
-    // Determine final coordinates: use new if valid, otherwise preserve known position
-    const lat = (newLat !== null && !isNaN(newLat)) ? newLat : (v?.lat ?? null);
-    const lon = (newLon !== null && !isNaN(newLon)) ? newLon : (v?.lon ?? null);
-
-    // Sanity check coordinates
-    if (lat === null || lon === null || lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
-    if (Math.abs(lat) < 0.001 && Math.abs(lon) < 0.001) return;
-
-    const { strait, lake } = detectStraitOrLake(lat, lon);
-    const flag = v?.flag || getCountryFromMMSI(mmsi);
-
-    // Maintain recent navigation track
-    const track = v?.track ? [...v.track] : [];
-    if (newLat !== null && newLon !== null) {
-      const lastPoint = track[track.length - 1];
-      if (!lastPoint || Math.hypot(lat - lastPoint[0], lon - lastPoint[1]) > 0.0003) {
-        track.push([Number(lat.toFixed(5)), Number(lon.toFixed(5))]);
-        if (track.length > 35) track.shift();
-      }
-    }
-
-    const updatedVessel = {
-      ...(v || {}),
-      mmsi,
-      name: name || `VESSEL-${mmsi}`,
-      lat: Number(lat.toFixed(5)),
-      lon: Number(lon.toFixed(5)),
-      sog,
-      cog,
-      heading,
-      type,
-      flag,
-      imo,
-      callSign,
-      draft,
-      length,
-      width,
-      destination,
-      eta: destination || 'EN ROUTE',
-      last_port: v?.last_port || 'EN ROUTE',
-      strait: v?.strait || strait,
-      lake: v?.lake || lake,
-      ais_status: 'LIVE',
-      score: v?.score || Math.floor(75 + Math.random() * 25),
-      last_updated: now,
-      track,
-      streamed: true
-    };
-
-    this.vessels.set(mmsi, updatedVessel);
-    this.streamMessageCount += 1;
-    this.hasPendingUpdates = true;
-
-    // Prune if exceeds 25,000 vessels to preserve memory
-    if (this.vessels.size > 25000) {
-      this.pruneOldestVessels();
-    }
-
-    this.scheduleBatchNotify();
-  }
-
-  pruneOldestVessels() {
-    let oldestKey = null;
-    let oldestTime = Infinity;
-    for (const [mmsi, v] of this.vessels.entries()) {
-      // Never delete Great Lakes authentic roster or vessels with rank
-      if (v.is_great_lakes || v.rank) continue;
-      if (v.last_updated < oldestTime) {
-        oldestTime = v.last_updated;
-        oldestKey = mmsi;
-      }
-    }
-    if (oldestKey) {
-      this.vessels.delete(oldestKey);
-    }
+    } catch (e) {}
   }
 
   connectLocalProxy() {
@@ -405,16 +150,16 @@ class AISClientService {
     const wsUrl = `ws://${host}:8080/ws`;
 
     try {
-      this.localWs = new WebSocket(wsUrl);
-      this.localWs.onopen = () => {
-        console.log('[AISClient] Also connected to local Python AIS proxy:', wsUrl);
+      const localWs = new WebSocket(wsUrl);
+      localWs.onopen = () => {
+        console.log('[AISClient] Connected to local Python AIS proxy:', wsUrl);
       };
-      this.localWs.onmessage = (event) => {
+      localWs.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
           if (msg.type === 'SNAPSHOT' && Array.isArray(msg.vessels)) {
             msg.vessels.forEach(v => {
-              if (v && v.mmsi && !this.vessels.has(v.mmsi)) {
+              if (v && v.mmsi) {
                 this.vessels.set(v.mmsi, v);
               }
             });
@@ -432,124 +177,23 @@ class AISClientService {
 
   startLiveSimulation() {
     if (this.simInterval) return;
-    this.lastSimTime = Date.now();
-
-    // High-precision nautical dead-reckoning engine:
-    // Advances every vessel underway (SOG >= 0.5 kn) forward in real-time between AIS broadcasts
+    // Advances moving vessels in real time along their course and speed
     this.simInterval = setInterval(() => {
-      const now = Date.now();
-      const dtSeconds = Math.min(2.5, Math.max(0.5, (now - (this.lastSimTime || now)) / 1000));
-      this.lastSimTime = now;
-
       let changed = false;
-
-      for (const [mmsi, v] of this.vessels.entries()) {
-        const sog = v.sog;
-        if (typeof sog === 'number' && sog >= 0.5) {
-          const hdg = typeof v.heading === 'number' && v.heading !== 511
-            ? v.heading
-            : (typeof v.cog === 'number' ? v.cog : 0);
-          const cogRad = (hdg * Math.PI) / 180;
-          const latRad = (v.lat * Math.PI) / 180;
-
-          // Nautical physics: 1 knot = 1 NM / hour = (1/3600) NM / sec
-          // 1 NM = 1 minute of latitude = 1/60 degree
-          const distNm = (sog / 3600) * dtSeconds;
-          const dLat = (distNm / 60) * Math.cos(cogRad);
-          const dLon = (distNm / 60) * Math.sin(cogRad) / Math.max(0.2, Math.cos(latRad));
-
-          const newLat = Number((v.lat + dLat).toFixed(5));
-          const newLon = Number((v.lon + dLon).toFixed(5));
-
-          // Maintain recent track breadcrumbs
-          const track = v.track ? [...v.track] : [];
-          if (track.length === 0 || Math.hypot(newLat - track[track.length - 1][0], newLon - track[track.length - 1][1]) > 0.0004) {
-            track.push([newLat, newLon]);
-            if (track.length > 25) track.shift();
-          }
-
-          // Create new immutable cloned vessel object so React state triggers cleanly
-          this.vessels.set(mmsi, {
-            ...v,
-            lat: newLat,
-            lon: newLon,
-            track,
-            last_updated: now
-          });
+      this.vessels.forEach(v => {
+        if (v.sog && v.sog >= 0.5) {
+          const cogRad = ((v.cog || v.heading || 0) * Math.PI) / 180;
+          const speedFactor = v.sog * 0.000004;
+          v.lat += Math.cos(cogRad) * speedFactor;
+          v.lon += Math.sin(cogRad) * speedFactor;
           changed = true;
         }
-      }
-
+      });
       if (changed) {
         this.hasPendingUpdates = true;
         this.scheduleBatchNotify();
       }
-    }, 1000); // 1-second update cycle ensures continuous, smooth live movement
-  }
-
-  scheduleReconnect() {
-    if (this.reconnectTimer) return;
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.connect();
-    }, 4000);
-  }
-
-  async fetchInitialSnapshot() {
-    // 1. On localhost, query the live Python AIS backend proxy if running
-    if (this.isLocalHost()) {
-      try {
-        const host = window.location.hostname || 'localhost';
-        const res = await fetch(`http://${host}:8080/api/vessels`);
-        if (res.ok) {
-          const vessels = await res.json();
-          if (Array.isArray(vessels) && vessels.length > 0) {
-            vessels.forEach(v => {
-              if (v && v.mmsi && !this.vessels.has(v.mmsi)) {
-                this.vessels.set(v.mmsi, v);
-              }
-            });
-            this.hasPendingUpdates = true;
-            this.scheduleBatchNotify();
-            return;
-          }
-        }
-      } catch (e) {}
-    }
-
-    // 2. On static hosting (GitHub Pages) or if local server is not running:
-    // Load pre-bundled live global fleet snapshot containing 20,000+ real AIS vessels
-    // Try multiple URL variants to handle GitHub Pages subpath with or without trailing slash
-    const basePath = typeof window !== 'undefined' ? window.location.pathname.replace(/\/+$/, '') : '';
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const candidateUrls = [
-      `${origin}${basePath}/fleet_snapshot.json`,
-      './fleet_snapshot.json',
-      '/ShipFinder/fleet_snapshot.json',
-      '/fleet_snapshot.json'
-    ];
-
-    for (const url of candidateUrls) {
-      try {
-        const res = await fetch(url);
-        if (res.ok) {
-          const vessels = await res.json();
-          if (Array.isArray(vessels) && vessels.length > 0) {
-            vessels.forEach(v => {
-              if (v && v.mmsi && !this.vessels.has(v.mmsi)) {
-                this.vessels.set(v.mmsi, { ...v, last_updated: Date.now() });
-              }
-            });
-            console.log(`[AISClient] Successfully loaded ${vessels.length} vessels from ${url}`);
-            this.hasPendingUpdates = true;
-            this.scheduleBatchNotify();
-            return;
-          }
-        }
-      } catch (e) {
-        // Try next candidate
-      }
-    }
+    }, 2500);
   }
 }
 
