@@ -161,6 +161,61 @@ def detect_strait_or_lake(lat, lon):
 
     return "High Seas", None
 
+NAV_STATUS_MAP = {
+    0: "Underway using engine",
+    1: "At anchor",
+    2: "Not under command",
+    3: "Restricted manoeuvrability",
+    4: "Constrained by her draught",
+    5: "Moored",
+    6: "Aground",
+    7: "Engaged in fishing",
+    8: "Under way sailing",
+    9: "Reserved for hazardous material",
+    10: "Reserved for hazardous material",
+    11: "Power-driven vessel towing astern",
+    12: "Power-driven vessel pushing ahead or towing alongside",
+    14: "AIS-SART active",
+    15: "Undefined"
+}
+
+def is_valid_coord(lat, lon):
+    if lat is None or lon is None:
+        return False
+    try:
+        lat = float(lat)
+        lon = float(lon)
+    except (ValueError, TypeError):
+        return False
+    if lat == 0.0 and lon == 0.0:
+        return False
+    if lat <= -90.0 or lat >= 90.0 or lon <= -180.0 or lon >= 180.0:
+        return False
+    if abs(lat) < 0.001 and abs(lon) < 0.001:
+        return False
+    return True
+
+SUBSCRIPTION_BOXES = [
+    # 1. North America: Great Lakes & St. Lawrence Seaway
+    [[41.0, -93.5], [49.5, -74.5]],
+    # 2. US East Coast, Florida, Bahamas, Gulf of Mexico, Mississippi River
+    [[24.0, -98.5], [45.5, -65.0]],
+    # 3. US West Coast, Puget Sound, Columbia River, California
+    [[32.0, -125.5], [49.5, -116.5]],
+    # 4. Dover Strait / English Channel / North Sea
+    [[49.5, -2.0], [52.0, 3.0]],
+    # 5. Bosphorus Strait & Sea of Marmara
+    [[40.8, 28.5], [41.5, 29.5]],
+    # 6. Strait of Gibraltar
+    [[35.0, -6.5], [37.0, -5.0]],
+    # 7. Suez Canal & Red Sea approaches
+    [[27.5, 32.0], [32.0, 33.5]],
+    # 8. Strait of Malacca & Singapore Port
+    [[1.0, 103.0], [2.0, 104.5]],
+    # 9. Panama Canal & Caribbean / Pacific approaches
+    [[8.0, -80.5], [10.0, -79.0]]
+]
+
 def load_existing_fleet():
     fleet = {}
     source_file = None
@@ -178,9 +233,17 @@ def load_existing_fleet():
                 if isinstance(vessels_list, list):
                     for v in vessels_list:
                         mmsi = v.get("mmsi")
-                        if mmsi:
-                            fleet[int(mmsi)] = v
-            logger.info("Loaded %d existing vessels from %s", len(fleet), os.path.basename(source_file))
+                        lat = v.get("lat")
+                        lon = v.get("lon")
+                        name = (v.get("name") or "").upper()
+                        if not mmsi or not is_valid_coord(lat, lon):
+                            continue
+                        if name.startswith("YACHT-") or name.startswith("TUG RIVER-") or name.startswith("ATLANTIC-") or name.startswith("CARGO-") or name.startswith("VESSEL-3000"):
+                            continue
+                        if "last_updated" not in v:
+                            v["last_updated"] = time.time()
+                        fleet[int(mmsi)] = v
+            logger.info("Loaded %d genuine vessels from %s", len(fleet), os.path.basename(source_file))
         except Exception as e:
             logger.warning("Could not read %s: %s", source_file, e)
 
@@ -197,10 +260,10 @@ async def fetch_ais_stream(fleet):
         async with websockets.connect(AISSTREAM_URL, ping_interval=20, ping_timeout=20) as ws:
             sub = {
                 "APIKey": API_KEY,
-                "BoundingBoxes": [[[-90, -180], [90, 180]]]
+                "BoundingBoxes": SUBSCRIPTION_BOXES
             }
             await ws.send(json.dumps(sub))
-            logger.info("Subscribed to global AIS stream. Listening for live vessels...")
+            logger.info("Subscribed to %d prioritized maritime bounding boxes. Listening for live vessels...", len(SUBSCRIPTION_BOXES))
 
             start_time = time.time()
             now_iso = datetime.now(timezone.utc).isoformat()
@@ -304,9 +367,12 @@ async def fetch_ais_stream(fleet):
                             v["call_sign"] = rep_b["CallSign"].strip()
 
                 # Coordinate sanity check
-                if -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0 and (abs(lat) > 0.001 or abs(lon) > 0.001):
+                if is_valid_coord(lat, lon):
                     v["lat"] = round(float(lat), 5)
                     v["lon"] = round(float(lon), 5)
+                elif "lat" not in v or not is_valid_coord(v["lat"], v["lon"]):
+                    # Don't add a vessel with missing/invalid coordinates
+                    continue
 
                 v["mmsi"] = mmsi
                 if "sog" not in v: v["sog"] = 0.0
@@ -319,7 +385,16 @@ async def fetch_ais_stream(fleet):
                 if "draft" not in v: v["draft"] = 8.0
                 if "destination" not in v: v["destination"] = "EN ROUTE"
                 v["ais_status"] = "LIVE"
+                v["time_utc"] = meta.get("time_utc", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"))
                 v["last_updated"] = time.time()
+
+                if "NavigationalStatus" in pos and pos["NavigationalStatus"] is not None:
+                    v["nav_status_code"] = pos["NavigationalStatus"]
+                    v["nav_status"] = NAV_STATUS_MAP.get(pos["NavigationalStatus"], "Underway" if v["sog"] >= 0.5 else "Moored")
+                elif v.get("sog", 0) < 0.6:
+                    v["nav_status"] = "Moored / At anchor"
+                else:
+                    v["nav_status"] = "Underway using engine"
 
                 strait, lake = detect_strait_or_lake(v["lat"], v["lon"])
                 if "strait" not in v or v["strait"] == "High Seas":
@@ -365,7 +440,10 @@ def save_fleet(fleet):
             "draft": v.get("draft", 8.0),
             "destination": v.get("destination", "EN ROUTE"),
             "strait": v.get("strait", "High Seas"),
-            "ais_status": v.get("ais_status", "LIVE")
+            "ais_status": v.get("ais_status", "LIVE"),
+            "nav_status": v.get("nav_status", "Underway using engine" if (v.get("sog", 0) >= 0.5) else "Moored / At anchor"),
+            "time_utc": v.get("time_utc", now_iso),
+            "last_updated": v.get("last_updated", time.time())
         }
         if v.get("lake"):
             vessel_obj["lake"] = v["lake"]
@@ -413,7 +491,10 @@ def save_fleet(fleet):
                 "destination": v["destination"],
                 "strait": v["strait"],
                 "lake": v.get("lake"),
-                "rank": v.get("rank")
+                "rank": v.get("rank"),
+                "nav_status": v.get("nav_status"),
+                "time_utc": v.get("time_utc"),
+                "last_updated": v.get("last_updated")
             }
         })
 

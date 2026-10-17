@@ -162,64 +162,63 @@ def detect_strait_or_lake(lat, lon):
 
     return "High Seas", None
 
+NAV_STATUS_MAP = {
+    0: "Underway using engine",
+    1: "At anchor",
+    2: "Not under command",
+    3: "Restricted manoeuvrability",
+    4: "Constrained by her draught",
+    5: "Moored",
+    6: "Aground",
+    7: "Engaged in fishing",
+    8: "Under way sailing",
+    9: "Reserved for hazardous material",
+    10: "Reserved for hazardous material",
+    11: "Power-driven vessel towing astern",
+    12: "Power-driven vessel pushing ahead or towing alongside",
+    14: "AIS-SART active",
+    15: "Undefined"
+}
+
+def is_valid_coord(lat, lon):
+    if lat is None or lon is None:
+        return False
+    try:
+        lat = float(lat)
+        lon = float(lon)
+    except (ValueError, TypeError):
+        return False
+    if lat == 0.0 and lon == 0.0:
+        return False
+    if lat <= -90.0 or lat >= 90.0 or lon <= -180.0 or lon >= 180.0:
+        return False
+    if abs(lat) < 0.001 and abs(lon) < 0.001:
+        return False
+    return True
+
+SUBSCRIPTION_BOXES = [
+    # 1. North America: Great Lakes & St. Lawrence Seaway
+    [[41.0, -93.5], [49.5, -74.5]],
+    # 2. US East Coast, Florida, Bahamas, Gulf of Mexico, Mississippi River
+    [[24.0, -98.5], [45.5, -65.0]],
+    # 3. US West Coast, Puget Sound, Columbia River, California
+    [[32.0, -125.5], [49.5, -116.5]],
+    # 4. Dover Strait / English Channel / North Sea
+    [[49.5, -2.0], [52.0, 3.0]],
+    # 5. Bosphorus Strait & Sea of Marmara
+    [[40.8, 28.5], [41.5, 29.5]],
+    # 6. Strait of Gibraltar
+    [[35.0, -6.5], [37.0, -5.0]],
+    # 7. Suez Canal & Red Sea approaches
+    [[27.5, 32.0], [32.0, 33.5]],
+    # 8. Strait of Malacca & Singapore Port
+    [[1.0, 103.0], [2.0, 104.5]],
+    # 9. Panama Canal & Caribbean / Pacific approaches
+    [[8.0, -80.5], [10.0, -79.0]]
+]
+
 def init_global_fleet():
     fleet = {}
-    mmsi_ctr = 300000000
-
-    def add(name, vtype, flag, cargo, lat, lon, sog, cog, l=190, w=28, draft=8.5, mmsi=None, strait="High Seas", dir="En Route", lake=None):
-        nonlocal mmsi_ctr
-        if not mmsi:
-            mmsi_ctr += 1
-            mmsi = mmsi_ctr
-        fleet[mmsi] = {
-            "mmsi": mmsi,
-            "name": name,
-            "imo": random.randint(9100000, 9890000),
-            "flag": flag,
-            "type": vtype,
-            "cargo": cargo,
-            "lat": round(lat, 5),
-            "lon": round(lon, 5),
-            "sog": round(sog, 1),
-            "cog": round(cog, 1),
-            "heading": round(cog, 1),
-            "draft": round(draft, 1),
-            "length": l,
-            "width": w,
-            "last_port": "COMMERCIAL",
-            "eta": "SCHEDULED",
-            "ais_status": "LIVE",
-            "score": random.randint(78, 96),
-            "strait": strait,
-            "lake": lake,
-            "direction": dir,
-            "track": [[round(lat - 0.04, 5), round(lon - 0.04, 5)], [round(lat, 5), round(lon, 5)]],
-            "last_updated": time.time()
-        }
-
-    # Top 20 Biggest Ships on the Great Lakes (Real Fleet Roster)
-    add("PAUL R. TREGURTHA", "Cargo Ship", "USA", "Low Sulfur Coal", 43.15, -82.42, 10.2, 182, 308.9, 32.0, 8.9, 366904930, "Great Lakes", "Southbound", "Lake Huron")
-    add("EDWIN H. GOTT", "Cargo Ship", "USA", "Iron Ore", 44.10, -83.40, 12.8, 330, 306.0, 32.0, 9.1, 366904880, "Great Lakes", "Northbound", "Lake Huron")
-    add("JAMES R. BARKER", "Cargo Ship", "USA", "Taconite Pellets", 47.25, -88.10, 12.1, 285, 306.0, 32.0, 9.0, 366904940, "Great Lakes", "Westbound", "Lake Superior")
-    add("MESABI MINER", "Cargo Ship", "USA", "Iron Ore Pellets", 46.75, -84.95, 11.4, 310, 306.0, 32.0, 8.9, 366904950, "Great Lakes", "Northbound", "Lake Superior")
-    add("EDGAR B. SPEER", "Cargo Ship", "USA", "Taconite", 43.80, -87.10, 13.0, 175, 306.0, 32.0, 9.1, 366904890, "Great Lakes", "Southbound", "Lake Michigan")
-    add("AMERICAN SPIRIT", "Cargo Ship", "USA", "Low Sulfur Coal", 41.75, -82.50, 11.9, 72, 306.0, 32.0, 8.8, 366904920, "Great Lakes", "Eastbound", "Lake Erie")
-    add("INDIANA HARBOR", "Cargo Ship", "USA", "Taconite", 42.10, -87.10, 11.5, 345, 304.8, 32.0, 8.6, 366972000, "Great Lakes", "Northbound", "Lake Michigan")
-    add("BURNS HARBOR", "Cargo Ship", "USA", "Iron Ore Pellets", 43.05, -87.40, 12.3, 20, 304.8, 32.0, 8.7, 366972010, "Great Lakes", "Northbound", "Lake Michigan")
-    add("STEWART J. CORT", "Cargo Ship", "USA", "Pellets", 45.85, -84.80, 10.9, 92, 304.8, 32.0, 8.7, 366904820, "Great Lakes", "Eastbound", "Lake Huron")
-    add("AMERICAN CENTURY", "Cargo Ship", "USA", "Coal", 47.10, -89.80, 12.6, 65, 304.8, 32.0, 8.8, 366904980, "Great Lakes", "Eastbound", "Lake Superior")
-    add("AMERICAN INTEGRITY", "Cargo Ship", "USA", "Iron Ore", 44.80, -82.90, 11.7, 160, 304.8, 32.0, 8.8, 366904910, "Great Lakes", "Southbound", "Lake Huron")
-    add("WALTER J. MCCARTHY JR.", "Cargo Ship", "USA", "Low Sulfur Coal", 46.90, -91.20, 10.5, 75, 304.8, 32.0, 8.7, 366904960, "Great Lakes", "Eastbound", "Lake Superior")
-    add("PRESQUE ISLE", "Cargo Ship", "USA", "Stone & Pellets", 45.30, -83.45, 11.2, 145, 304.8, 31.7, 8.6, 366904830, "Great Lakes", "Southbound", "Lake Huron")
-    add("LEE A. TREGURTHA", "Cargo Ship", "USA", "Iron Ore", 41.90, -81.70, 12.0, 250, 251.8, 22.9, 8.4, 366904860, "Great Lakes", "Westbound", "Lake Erie")
-    add("HON. JAMES L. OBERSTAR", "Cargo Ship", "USA", "Iron Ore", 46.78, -92.05, 8.5, 235, 245.7, 22.9, 8.4, 366904840, "Great Lakes", "Inbound", "Lake Superior")
-    add("JOHN G. MUNSON", "Cargo Ship", "USA", "Limestone", 44.20, -86.95, 13.2, 190, 234.1, 21.9, 8.3, 366904850, "Great Lakes", "Southbound", "Lake Michigan")
-    add("ARTHUR M. ANDERSON", "Cargo Ship", "USA", "Stone", 46.80, -89.50, 11.8, 78, 233.8, 21.3, 8.2, 366914590, "Great Lakes", "Eastbound", "Lake Superior")
-    add("CASON J. CALLAWAY", "Cargo Ship", "USA", "Iron Ore Pellets", 45.10, -83.20, 12.5, 340, 233.8, 21.3, 8.2, 366904870, "Great Lakes", "Northbound", "Lake Huron")
-    add("AMERICAN MARINER", "Cargo Ship", "USA", "Coal", 45.45, -84.22, 13.1, 125, 222.5, 23.8, 8.8, 366904970, "Great Lakes", "Southbound", "Lake Huron")
-    add("SAM LAUD", "Cargo Ship", "USA", "Iron Ore Pellets", 44.62, -86.85, 12.4, 42, 198.0, 20.7, 8.5, 367123450, "Great Lakes", "Eastbound", "Lake Michigan")
-
-    # Load from public/vessels.json if present
     base_dir = os.path.dirname(os.path.abspath(__file__))
     candidates = [
         os.path.join(base_dir, "public", "vessels.json"),
@@ -234,9 +233,17 @@ def init_global_fleet():
                     if isinstance(vlist, list):
                         for v in vlist:
                             mmsi = v.get("mmsi")
-                            if mmsi:
-                                fleet[int(mmsi)] = v
-                logger.info("Loaded %d vessels from snapshot %s", len(fleet), os.path.basename(c))
+                            lat = v.get("lat")
+                            lon = v.get("lon")
+                            name = (v.get("name") or "").upper()
+                            if not mmsi or not is_valid_coord(lat, lon):
+                                continue
+                            if name.startswith("YACHT-") or name.startswith("TUG RIVER-") or name.startswith("ATLANTIC-") or name.startswith("CARGO-") or name.startswith("VESSEL-3000"):
+                                continue
+                            if "last_updated" not in v:
+                                v["last_updated"] = time.time()
+                            fleet[int(mmsi)] = v
+                logger.info("Loaded %d genuine vessels from snapshot %s", len(fleet), os.path.basename(c))
                 break
             except Exception as e:
                 logger.warning("Error loading snapshot %s: %s", c, e)
@@ -288,33 +295,50 @@ async def aisstream_consumer():
             async with websockets.connect(AISSTREAM_URL, ping_interval=20, ping_timeout=20) as ws:
                 subscription = {
                     "APIKey": API_KEY,
-                    "BoundingBoxes": [[[-90, -180], [90, 180]]]
+                    "BoundingBoxes": SUBSCRIPTION_BOXES
                 }
                 await ws.send(json.dumps(subscription))
-                logger.info("Subscribed to global unfiltered AIS stream successfully.")
+                logger.info("Subscribed to %d prioritized maritime bounding boxes successfully.", len(SUBSCRIPTION_BOXES))
 
                 while True:
                     raw_data = await ws.recv()
                     data = json.loads(raw_data)
                     msg_type = data.get("MessageType")
+                    if msg_type == "SubscriptionConfirmation":
+                        continue
+
                     meta = data.get("MetaData", {})
                     mmsi = meta.get("MMSI")
-
-                    if not mmsi: continue
+                    if not mmsi:
+                        continue
                     mmsi = int(mmsi)
                     now_ts = time.time()
+                    time_utc_str = meta.get("time_utc", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"))
 
+                    msg_body = data.get("Message", {})
+                    pos = msg_body.get(msg_type, {}) if isinstance(msg_body, dict) else {}
+
+                    # Extract coordinates from pos report or metadata
+                    raw_lat = pos.get("Latitude") if pos.get("Latitude") is not None else meta.get("latitude")
+                    raw_lon = pos.get("Longitude") if pos.get("Longitude") is not None else meta.get("longitude")
+                    has_valid_coords = is_valid_coord(raw_lat, raw_lon)
+
+                    # If vessel not seen yet and no valid coordinates, don't create an invalid record
                     if mmsi not in vessels_db:
-                        strait_name, lake_name = detect_strait_or_lake(meta.get("latitude", 0.0), meta.get("longitude", 0.0))
+                        if not has_valid_coords:
+                            continue
+                        cur_lat = round(float(raw_lat), 5)
+                        cur_lon = round(float(raw_lon), 5)
+                        strait_name, lake_name = detect_strait_or_lake(cur_lat, cur_lon)
                         vessels_db[mmsi] = {
                             "mmsi": mmsi,
-                            "name": meta.get("ShipName", f"VESSEL-{mmsi}").strip() or f"VESSEL-{mmsi}",
+                            "name": meta.get("ShipName", f"VESSEL-{mmsi}").strip().lstrip("@") or f"VESSEL-{mmsi}",
                             "imo": 0,
                             "flag": get_country_from_mmsi(mmsi),
                             "type": "Cargo Ship",
                             "cargo": "Commercial Cargo",
-                            "lat": meta.get("latitude", 0.0),
-                            "lon": meta.get("longitude", 0.0),
+                            "lat": cur_lat,
+                            "lon": cur_lon,
                             "sog": 0.0,
                             "cog": 0.0,
                             "heading": 0.0,
@@ -324,54 +348,78 @@ async def aisstream_consumer():
                             "last_port": "EN ROUTE",
                             "eta": "--:--",
                             "ais_status": "LIVE",
+                            "nav_status": "Underway using engine",
                             "score": 85,
                             "strait": strait_name,
                             "lake": lake_name,
                             "direction": "En Route",
-                            "track": [],
+                            "track": [[cur_lat, cur_lon]],
+                            "time_utc": time_utc_str,
                             "last_updated": now_ts
                         }
 
                     v = vessels_db[mmsi]
                     v["last_updated"] = now_ts
+                    v["time_utc"] = time_utc_str
 
                     if meta.get("ShipName"):
-                        name = meta.get("ShipName").strip()
-                        if name: v["name"] = name
-
-                    msg_body = data.get("Message", {})
+                        name = meta.get("ShipName").strip().lstrip("@")
+                        if name:
+                            v["name"] = name
 
                     if msg_type in ("PositionReport", "StandardClassBPositionReport", "ExtendedClassBPositionReport"):
-                        pos = msg_body.get(msg_type, {})
-                        lat = pos.get("Latitude", v["lat"])
-                        lon = pos.get("Longitude", v["lon"])
-                        sog = pos.get("Sog", v["sog"])
-                        cog = pos.get("Cog", v["cog"])
-                        hdg = pos.get("TrueHeading", v["heading"])
-                        if hdg == 511: hdg = cog
+                        if has_valid_coords:
+                            new_lat = round(float(raw_lat), 5)
+                            new_lon = round(float(raw_lon), 5)
+                            v["lat"] = new_lat
+                            v["lon"] = new_lon
+                            strait_name, lake_name = detect_strait_or_lake(new_lat, new_lon)
+                            v["strait"] = strait_name
+                            if lake_name:
+                                v["lake"] = lake_name
 
-                        v["lat"] = round(lat, 5)
-                        v["lon"] = round(lon, 5)
-                        v["sog"] = round(sog, 1)
-                        v["cog"] = round(cog, 1)
-                        v["heading"] = round(hdg, 1)
-                        if "RateOfTurn" in pos: v["rate_of_turn"] = pos["RateOfTurn"]
-                        if "NavigationalStatus" in pos: v["nav_status"] = pos["NavigationalStatus"]
-                        if msg_type == "StandardClassBPositionReport" and v["type"] == "Commercial Vessel":
+                            # GPS breadcrumb track
+                            if not v.get("track"):
+                                v["track"] = [[new_lat, new_lon]]
+                            else:
+                                last_pt = v["track"][-1]
+                                if abs(last_pt[0] - new_lat) > 0.0005 or abs(last_pt[1] - new_lon) > 0.0005:
+                                    v["track"].append([new_lat, new_lon])
+                                    if len(v["track"]) > 30:
+                                        v["track"] = v["track"][-30:]
+
+                        if "Sog" in pos and pos["Sog"] is not None:
+                            v["sog"] = round(float(pos["Sog"]), 1)
+                        if "Cog" in pos and pos["Cog"] is not None:
+                            v["cog"] = round(float(pos["Cog"]), 1)
+                        if "TrueHeading" in pos and pos["TrueHeading"] not in (None, 511):
+                            v["heading"] = round(float(pos["TrueHeading"]), 1)
+                        else:
+                            v["heading"] = v.get("cog", 0.0)
+
+                        if "RateOfTurn" in pos:
+                            v["rate_of_turn"] = pos["RateOfTurn"]
+
+                        if "NavigationalStatus" in pos and pos["NavigationalStatus"] is not None:
+                            v["nav_status_code"] = pos["NavigationalStatus"]
+                            v["nav_status"] = NAV_STATUS_MAP.get(pos["NavigationalStatus"], "Underway" if v["sog"] >= 0.5 else "Moored")
+                        elif v.get("sog", 0) < 0.6:
+                            v["nav_status"] = "Moored / At anchor"
+                        else:
+                            v["nav_status"] = "Underway using engine"
+
+                        if msg_type == "StandardClassBPositionReport" and v.get("type") == "Commercial Vessel":
                             v["type"] = "Pleasure Craft"
                         if msg_type == "ExtendedClassBPositionReport":
-                            if pos.get("ShipName"): v["name"] = pos["ShipName"].strip() or v["name"]
-                            if pos.get("Type"): v["type"] = map_ship_type(pos["Type"])
-                        
-                        strait_name, lake_name = detect_strait_or_lake(v["lat"], v["lon"])
-                        v["strait"] = strait_name
-                        if lake_name: v["lake"] = lake_name
-                        v["time_utc"] = meta.get("time_utc", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"))
+                            if pos.get("ShipName"):
+                                v["name"] = pos["ShipName"].strip().lstrip("@") or v["name"]
+                            if pos.get("Type"):
+                                v["type"] = map_ship_type(pos["Type"])
 
                     elif msg_type == "ShipStaticData":
                         static = msg_body.get("ShipStaticData", {})
                         if static.get("Name"):
-                            v["name"] = static["Name"].strip() or v["name"]
+                            v["name"] = static["Name"].strip().lstrip("@") or v["name"]
                         if static.get("ImoNumber"):
                             v["imo"] = static["ImoNumber"]
                         if static.get("CallSign"):
@@ -380,7 +428,7 @@ async def aisstream_consumer():
                             v["type"] = map_ship_type(static["Type"])
                             v["cargo_type_code"] = static["Type"]
                         if static.get("MaximumStaticDraught"):
-                            v["draft"] = round(static["MaximumStaticDraught"], 1)
+                            v["draft"] = round(float(static["MaximumStaticDraught"]), 1)
                         if static.get("Destination"):
                             v["destination"] = static["Destination"].strip()
                             v["eta"] = v["destination"]
@@ -400,7 +448,7 @@ async def aisstream_consumer():
                         rep_a = sdr.get("ReportA", {})
                         rep_b = sdr.get("ReportB", {})
                         if rep_a.get("Valid") and rep_a.get("ShipName"):
-                            v["name"] = rep_a["ShipName"].strip() or v["name"]
+                            v["name"] = rep_a["ShipName"].strip().lstrip("@") or v["name"]
                         if rep_b.get("Valid"):
                             if rep_b.get("Type"): v["type"] = map_ship_type(rep_b["Type"])
                             if rep_b.get("CallSign"): v["call_sign"] = rep_b["CallSign"].strip()
@@ -416,21 +464,6 @@ async def aisstream_consumer():
         except Exception as e:
             logger.warning("AISStream connection error: %s. Reconnecting in 5s...", e)
             await asyncio.sleep(5)
-
-# Periodic dead-reckoning movement simulation for active fleet
-async def fleet_simulation_loop():
-    while True:
-        await asyncio.sleep(2.0)
-        for mmsi, v in list(vessels_db.items())[:300]:
-            sog = v.get("sog", 0)
-            if sog > 0.5:
-                hdg_rad = math.radians(v.get("heading", 0))
-                dist_deg = (sog * (2.0 / 3600.0)) / 60.0
-                v["lat"] = round(v["lat"] + dist_deg * math.cos(hdg_rad), 5)
-                v["lon"] = round(v["lon"] + (dist_deg * math.sin(hdg_rad)) / max(0.2, math.cos(math.radians(v["lat"]))), 5)
-                # Queue a fraction for batch update
-                if random.random() < 0.1:
-                    update_batch[mmsi] = v
 
 # --- HTTP Endpoints ---
 async def handle_options(request):
@@ -628,7 +661,6 @@ async def main():
 
     await asyncio.gather(
         aisstream_consumer(),
-        fleet_simulation_loop(),
         batch_broadcast_worker()
     )
 

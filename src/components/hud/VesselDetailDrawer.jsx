@@ -41,9 +41,29 @@ export default function VesselDetailDrawer({
   const draftFt = (draftM * 3.28084).toFixed(1);
 
   const isMoored = sog < 0.6;
-  const statusText = isMoored ? 'MOORED / AT ANCHOR' : 'UNDERWAY USING ENGINE';
+  const statusText = vessel.nav_status?.toUpperCase() || (isMoored ? 'MOORED / AT ANCHOR' : 'UNDERWAY USING ENGINE');
   const statusColor = isMoored ? 'text-amber-500' : 'text-emerald-500';
   const statusBg = isMoored ? 'bg-amber-500/10 border-amber-500/30' : 'bg-emerald-500/10 border-emerald-500/30';
+
+  const getPingAge = (v) => {
+    if (!v) return { label: 'LIVE', isRecent: true };
+    const now = Date.now();
+    let ts = v.last_updated_ts;
+    if (!ts && v.last_updated) {
+      ts = v.last_updated > 1e11 ? v.last_updated : v.last_updated * 1000;
+    }
+    if (!ts && v.time_utc) {
+      try { ts = new Date(v.time_utc).getTime(); } catch (e) {}
+    }
+    if (!ts) return { label: 'LIVE AIS', isRecent: true };
+    const diffSec = Math.max(0, Math.floor((now - ts) / 1000));
+    if (diffSec < 60) return { label: `${diffSec}s ago`, isRecent: true };
+    if (diffSec < 3600) return { label: `${Math.floor(diffSec / 60)}m ago`, isRecent: diffSec < 900 };
+    if (diffSec < 86400) return { label: `${Math.floor(diffSec / 3600)}h ago`, isRecent: false };
+    return { label: `${Math.floor(diffSec / 86400)}d ago`, isRecent: false };
+  };
+
+  const pingInfo = getPingAge(vessel);
 
   const toDMS = (coord, isLat) => {
     if (typeof coord !== 'number' || isNaN(coord)) {
@@ -59,7 +79,7 @@ export default function VesselDetailDrawer({
   };
 
   const handleCopyTelemetry = () => {
-    const text = `Vessel: ${vessel.name || 'VESSEL'}\nType: ${vessel.type || 'Commercial'}\nMMSI: ${vessel.mmsi}\nIMO: ${vessel.imo || 'N/A'}\nDimensions: ${lengthFt.toLocaleString()} ft × ${widthFt} ft\nDraught: ${draftFt} ft\nPosition: ${lat.toFixed(5)}, ${lon.toFixed(5)}\nSpeed: ${sog} KN\nHeading: ${Math.round(heading)}°T\nDestination: ${vessel.destination || 'N/A'}\nStatus: ${statusText}`;
+    const text = `Vessel: ${vessel.name || 'VESSEL'}\nType: ${vessel.type || 'Commercial'}\nMMSI: ${vessel.mmsi}\nIMO: ${vessel.imo || 'N/A'}\nDimensions: ${lengthFt.toLocaleString()} ft × ${widthFt} ft\nDraught: ${draftFt} ft\nPosition: ${lat.toFixed(5)}, ${lon.toFixed(5)}\nSpeed: ${sog} KN\nHeading: ${Math.round(heading)}°T\nDestination: ${vessel.destination || 'N/A'}\nStatus: ${statusText}\nLast Ping: ${pingInfo.label}`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -129,9 +149,11 @@ export default function VesselDetailDrawer({
                 {statusText}
               </span>
             </div>
-            <span className="text-[9px] text-slate-400">
-              LIVE AIS STREAM
-            </span>
+            <div className="flex items-center gap-1.5 text-[9px]">
+              <span className={pingInfo.isRecent ? 'text-emerald-400 font-bold' : 'text-amber-400 font-semibold'}>
+                {pingInfo.isRecent ? '🟢' : '🟡'} {pingInfo.label}
+              </span>
+            </div>
           </div>
 
           {/* Coordinates Grid */}
@@ -155,6 +177,14 @@ export default function VesselDetailDrawer({
               </span>
             </div>
           </div>
+
+          {/* AIS Timestamp Info */}
+          {vessel.time_utc && (
+            <div className="text-[9px] text-slate-400 flex items-center justify-between border-t border-slate-800 pt-1">
+              <span>AIS PING TIME:</span>
+              <span className="text-slate-200 font-semibold">{vessel.time_utc}</span>
+            </div>
+          )}
 
           {/* Heading & Speed Readout */}
           <div className="flex items-center justify-between pt-1">

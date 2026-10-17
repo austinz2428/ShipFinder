@@ -47,6 +47,24 @@ function getShipColor(type) {
   return SHIP_COLORS.other;
 }
 
+function getPingAge(v) {
+  if (!v) return { label: 'LIVE', isRecent: true };
+  const now = Date.now();
+  let ts = v.last_updated_ts;
+  if (!ts && v.last_updated) {
+    ts = v.last_updated > 1e11 ? v.last_updated : v.last_updated * 1000;
+  }
+  if (!ts && v.time_utc) {
+    try { ts = new Date(v.time_utc).getTime(); } catch (e) {}
+  }
+  if (!ts) return { label: 'LIVE AIS', isRecent: true };
+  const diffSec = Math.max(0, Math.floor((now - ts) / 1000));
+  if (diffSec < 60) return { label: `${diffSec}s ago`, isRecent: true };
+  if (diffSec < 3600) return { label: `${Math.floor(diffSec / 60)}m ago`, isRecent: diffSec < 900 };
+  if (diffSec < 86400) return { label: `${Math.floor(diffSec / 3600)}h ago`, isRecent: false };
+  return { label: `${Math.floor(diffSec / 86400)}d ago`, isRecent: false };
+}
+
 export default function GlobalMapView({
   vessels = [],
   selectedVessel,
@@ -184,7 +202,7 @@ export default function GlobalMapView({
         ctx.lineTo(point.x + boxSize, point.y + boxSize - 6);
         ctx.stroke();
 
-        // Popup Tag Box: e.g. "SAM LAUD" / "just now"
+        // Popup Tag Box: e.g. "SAM LAUD" / "🟢 14s ago · 12.4 KN"
         const labelX = point.x + boxSize + 6;
         const labelY = point.y - boxSize + 2;
 
@@ -193,7 +211,8 @@ export default function GlobalMapView({
         ctx.lineWidth = 1.0;
 
         const text1 = v.name || 'VESSEL';
-        const text2 = 'just now';
+        const ping = getPingAge(v);
+        const text2 = `${ping.isRecent ? '🟢' : '🟡'} ${ping.label} · ${v.sog || 0} KN`;
 
         ctx.font = 'bold 11px JetBrains Mono, monospace';
         const tWidth1 = ctx.measureText(text1).width;
@@ -210,8 +229,8 @@ export default function GlobalMapView({
         ctx.font = 'bold 11px JetBrains Mono, monospace';
         ctx.fillText(text1, labelX + 8, labelY + 11);
 
-        // "just now"
-        ctx.fillStyle = '#64748b';
+        // Ping Age & Speed
+        ctx.fillStyle = ping.isRecent ? '#047857' : '#64748b';
         ctx.font = '9px JetBrains Mono, monospace';
         ctx.fillText(text2, labelX + 8, labelY + 23);
       }
@@ -460,10 +479,19 @@ export default function GlobalMapView({
             </span>
           </div>
           <div className="grid grid-cols-2 text-[10px] gap-x-2 gap-y-0.5 text-gray-300 font-mono">
-            <div>SOG: <span className="text-white font-semibold">{hoveredVessel.sog} KN</span></div>
-            <div>HDG: <span className="text-white font-semibold">{hoveredVessel.heading}°T</span></div>
-            <div>FLAG: <span className="text-white">{hoveredVessel.flag}</span></div>
-            <div>STATUS: <span className="text-emerald-400">{hoveredVessel.ais_status || 'LIVE'}</span></div>
+            <div>SOG: <span className="text-white font-semibold">{hoveredVessel.sog || 0} KN</span></div>
+            <div>HDG: <span className="text-white font-semibold">{hoveredVessel.heading || hoveredVessel.cog || 0}°T</span></div>
+            <div>FLAG: <span className="text-white">{hoveredVessel.flag || 'USA'}</span></div>
+            <div>STATUS: <span className={(hoveredVessel.sog || 0) >= 0.5 ? 'text-emerald-400' : 'text-amber-400'}>{hoveredVessel.nav_status || ((hoveredVessel.sog || 0) >= 0.5 ? 'Underway' : 'Moored')}</span></div>
+            <div className="col-span-2 text-[9px] pt-0.5 border-t border-[#2d3748]/60 flex items-center justify-between">
+              <span className="text-gray-400">LAST PING:</span>
+              <span className={getPingAge(hoveredVessel).isRecent ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
+                {getPingAge(hoveredVessel).isRecent ? '🟢' : '🟡'} {getPingAge(hoveredVessel).label}
+              </span>
+            </div>
+            <div className="col-span-2 text-[9px] text-gray-400 truncate">
+              POS: {hoveredVessel.lat?.toFixed(5)}°, {hoveredVessel.lon?.toFixed(5)}°
+            </div>
           </div>
           <div className="mt-1 pt-1 border-t border-[#2d3748] text-[9px] text-tactical-orange font-semibold flex items-center justify-between">
             <span>CLICK TO LOCK // 3D TOPO</span>
@@ -483,9 +511,16 @@ export default function GlobalMapView({
               ▲
             </div>
             <div className="flex flex-col truncate">
-              <span className="text-[8px] sm:text-[9px] text-tactical-dim font-bold uppercase tracking-wider">TARGET ACQUIRED</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[8px] sm:text-[9px] text-tactical-dim font-bold uppercase tracking-wider">TARGET ACQUIRED</span>
+                <span className="text-[9px] text-emerald-700 font-semibold font-mono">
+                  {getPingAge(selectedVessel).isRecent ? '🟢' : '🟡'} {getPingAge(selectedVessel).label}
+                </span>
+              </div>
               <span className="text-xs sm:text-sm font-bold text-tactical-text truncate">{selectedVessel.name}</span>
-              <span className="text-[9px] sm:text-[10px] text-tactical-muted truncate">{selectedVessel.type} · {selectedVessel.sog} KN · HDG {selectedVessel.heading}°T</span>
+              <span className="text-[9px] sm:text-[10px] text-tactical-muted truncate">
+                {selectedVessel.type} · {selectedVessel.sog || 0} KN · HDG {selectedVessel.heading || selectedVessel.cog || 0}°T · {selectedVessel.lat?.toFixed(4)}°, {selectedVessel.lon?.toFixed(4)}°
+              </span>
             </div>
           </div>
 

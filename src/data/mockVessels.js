@@ -13,7 +13,7 @@ export const CHOKEPOINTS = [
   { id: 'panama', name: 'Panama Canal', region: 'Central America', lat: 9.0800, lon: -79.6800, zoom: 11 }
 ];
 
-export const INITIAL_VESSELS = generateGlobalFleet();
+export const INITIAL_VESSELS = [];
 
 export const INITIAL_ALERTS = [
   {
