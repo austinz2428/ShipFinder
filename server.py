@@ -252,6 +252,262 @@ SUBSCRIPTION_BOXES = [
     [[8.0, -80.5], [10.0, -79.0]]
 ]
 
+GREAT_LAKES_LEGENDS = [
+    {
+        "mmsi": 366904940,
+        "imo": 7729057,
+        "name": "PAUL R. TREGURTHA",
+        "call_sign": "WYR4481",
+        "flag": "USA",
+        "type": "Cargo Ship",
+        "length": 308,
+        "width": 32,
+        "draft": 8.5,
+        "destination": "DULUTH-SUPERIOR",
+        "strait": "Great Lakes",
+        "lake": "Lake Superior",
+        "lat": 46.8521,
+        "lon": -91.9542,
+        "sog": 11.8,
+        "cog": 278.0,
+        "heading": 278.0,
+        "nav_status": "Underway using engine",
+        "ais_status": "LIVE",
+        "is_great_lakes": True,
+        "protected": True,
+    },
+    {
+        "mmsi": 366972020,
+        "imo": 5025691,
+        "name": "ARTHUR M. ANDERSON",
+        "call_sign": "WDH7563",
+        "flag": "USA",
+        "type": "Cargo Ship",
+        "length": 234,
+        "width": 21,
+        "draft": 7.2,
+        "destination": "TOLEDO OH",
+        "strait": "Great Lakes",
+        "lake": "Lake Erie",
+        "lat": 41.6995,
+        "lon": -83.4512,
+        "sog": 0.0,
+        "cog": 0.0,
+        "heading": 112.0,
+        "nav_status": "Moored / At anchor",
+        "ais_status": "LIVE",
+        "is_great_lakes": True,
+        "protected": True,
+    },
+    {
+        "mmsi": 366904790,
+        "imo": 7105348,
+        "name": "STEWART J. CORT",
+        "call_sign": "WRB3968",
+        "flag": "USA",
+        "type": "Cargo Ship",
+        "length": 305,
+        "width": 32,
+        "draft": 8.8,
+        "destination": "BURNS HARBOR",
+        "strait": "Great Lakes",
+        "lake": "Lake Michigan",
+        "lat": 42.5120,
+        "lon": -87.1230,
+        "sog": 12.1,
+        "cog": 185.0,
+        "heading": 185.0,
+        "nav_status": "Underway using engine",
+        "ais_status": "LIVE",
+        "is_great_lakes": True,
+        "protected": True,
+    },
+    {
+        "mmsi": 366904950,
+        "imo": 5205411,
+        "name": "LEE A. TREGURTHA",
+        "call_sign": "WA9196",
+        "flag": "USA",
+        "type": "Cargo Ship",
+        "length": 251,
+        "width": 23,
+        "draft": 8.1,
+        "destination": "DETROIT MI",
+        "strait": "Great Lakes",
+        "lake": "Lake Huron",
+        "lat": 44.8210,
+        "lon": -83.0540,
+        "sog": 10.4,
+        "cog": 160.0,
+        "heading": 160.0,
+        "nav_status": "Underway using engine",
+        "ais_status": "LIVE",
+        "is_great_lakes": True,
+        "protected": True,
+    },
+    {
+        "mmsi": 366904930,
+        "imo": 7514696,
+        "name": "MESABI MINER",
+        "call_sign": "WYR4480",
+        "flag": "USA",
+        "type": "Cargo Ship",
+        "length": 306,
+        "width": 32,
+        "draft": 8.5,
+        "destination": "CLEVELAND OH",
+        "strait": "Great Lakes",
+        "lake": "Lake Erie",
+        "lat": 41.7450,
+        "lon": -81.8210,
+        "sog": 11.0,
+        "cog": 95.0,
+        "heading": 95.0,
+        "nav_status": "Underway using engine",
+        "ais_status": "LIVE",
+        "is_great_lakes": True,
+        "protected": True,
+    },
+    {
+        "mmsi": 366938760,
+        "imo": 7390210,
+        "name": "SAM LAUD",
+        "call_sign": "WZC7602",
+        "flag": "USA",
+        "type": "Cargo Ship",
+        "length": 193,
+        "width": 21,
+        "draft": 7.1,
+        "destination": "STONEPORT MI",
+        "strait": "Great Lakes",
+        "lake": "Lake Huron",
+        "lat": 45.2921,
+        "lon": -83.4210,
+        "sog": 9.8,
+        "cog": 345.0,
+        "heading": 345.0,
+        "nav_status": "Underway using engine",
+        "ais_status": "LIVE",
+        "is_great_lakes": True,
+        "protected": True,
+    },
+    {
+        "mmsi": 368218940,
+        "imo": 9919864,
+        "name": "MARK W. BARKER",
+        "call_sign": "WDF4829",
+        "flag": "USA",
+        "type": "Cargo Ship",
+        "length": 195,
+        "width": 24,
+        "draft": 7.8,
+        "destination": "CLEVELAND OH",
+        "strait": "Great Lakes",
+        "lake": "Lake Erie",
+        "lat": 41.5210,
+        "lon": -81.7120,
+        "sog": 10.2,
+        "cog": 80.0,
+        "heading": 80.0,
+        "nav_status": "Underway using engine",
+        "ais_status": "LIVE",
+        "is_great_lakes": True,
+        "protected": True,
+    },
+    {
+        "mmsi": 366904830,
+        "imo": 7729033,
+        "name": "BURNS HARBOR",
+        "call_sign": "WYR4478",
+        "flag": "USA",
+        "type": "Cargo Ship",
+        "length": 305,
+        "width": 32,
+        "draft": 8.8,
+        "destination": "SUPERIOR WI",
+        "strait": "Great Lakes",
+        "lake": "Lake Superior",
+        "lat": 46.7210,
+        "lon": -92.0510,
+        "sog": 11.2,
+        "cog": 282.0,
+        "heading": 282.0,
+        "nav_status": "Underway using engine",
+        "ais_status": "LIVE",
+        "is_great_lakes": True,
+        "protected": True,
+    },
+    {
+        "mmsi": 366904840,
+        "imo": 7729045,
+        "name": "INDIANA HARBOR",
+        "call_sign": "WYR4479",
+        "flag": "USA",
+        "type": "Cargo Ship",
+        "length": 305,
+        "width": 32,
+        "draft": 8.7,
+        "destination": "BURNS HARBOR IN",
+        "strait": "Great Lakes",
+        "lake": "Lake Michigan",
+        "lat": 42.1210,
+        "lon": -87.2140,
+        "sog": 12.0,
+        "cog": 180.0,
+        "heading": 180.0,
+        "nav_status": "Underway using engine",
+        "ais_status": "LIVE",
+        "is_great_lakes": True,
+        "protected": True,
+    },
+    {
+        "mmsi": 366972010,
+        "imo": 5389566,
+        "name": "WILFRED SYKES",
+        "call_sign": "WDH7562",
+        "flag": "USA",
+        "type": "Cargo Ship",
+        "length": 206,
+        "width": 21,
+        "draft": 6.9,
+        "destination": "INDIANA HARBOR",
+        "strait": "Great Lakes",
+        "lake": "Lake Michigan",
+        "lat": 43.1520,
+        "lon": -86.8210,
+        "sog": 10.1,
+        "cog": 195.0,
+        "heading": 195.0,
+        "nav_status": "Underway using engine",
+        "ais_status": "LIVE",
+        "is_great_lakes": True,
+        "protected": True,
+    },
+    {
+        "mmsi": 366972070,
+        "imo": 5098040,
+        "name": "EDWARD L. RYERSON",
+        "call_sign": "WDH7568",
+        "flag": "USA",
+        "type": "Cargo Ship",
+        "length": 223,
+        "width": 23,
+        "draft": 7.3,
+        "destination": "SUPERIOR WI",
+        "strait": "Great Lakes",
+        "lake": "Lake Superior",
+        "lat": 46.7420,
+        "lon": -92.1120,
+        "sog": 0.0,
+        "cog": 0.0,
+        "heading": 90.0,
+        "nav_status": "Moored / At anchor",
+        "ais_status": "LIVE",
+        "is_great_lakes": True,
+        "protected": True,
+    }
+]
+
 def init_global_fleet():
     fleet = {}
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -282,6 +538,18 @@ def init_global_fleet():
                 break
             except Exception as e:
                 logger.warning("Error loading snapshot %s: %s", c, e)
+
+    # Always ensure Great Lakes legendary vessels are permanently seeded
+    for legend in GREAT_LAKES_LEGENDS:
+        m = legend["mmsi"]
+        if m not in fleet:
+            fleet[m] = dict(legend)
+            fleet[m]["last_updated"] = time.time()
+        else:
+            fleet[m]["is_great_lakes"] = True
+            fleet[m]["protected"] = True
+            if not fleet[m].get("lake"):
+                fleet[m]["lake"] = legend.get("lake")
 
     return fleet
 
@@ -493,8 +761,18 @@ async def aisstream_consumer():
 
                     # Cap memory to ~25,000 vessels (free cloud 512MB RAM safe)
                     if len(vessels_db) > 25000:
-                        oldest = min(vessels_db.keys(), key=lambda k: vessels_db[k].get("last_updated", 0))
-                        del vessels_db[oldest]
+                        evictable = [
+                            k for k, item in vessels_db.items()
+                            if not item.get("protected")
+                            and not item.get("is_great_lakes")
+                            and item.get("strait") != "Great Lakes"
+                        ]
+                        if evictable:
+                            oldest = min(evictable, key=lambda k: vessels_db[k].get("last_updated", 0))
+                            del vessels_db[oldest]
+                        else:
+                            oldest = min(vessels_db.keys(), key=lambda k: vessels_db[k].get("last_updated", 0))
+                            del vessels_db[oldest]
 
         except Exception as e:
             logger.warning("AISStream connection error: %s. Reconnecting in 5s...", e)

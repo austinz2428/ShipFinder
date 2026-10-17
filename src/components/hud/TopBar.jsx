@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, Bell, Mountain, Map as MapIcon, X, AlertTriangle, AlertCircle, Info, Radio } from 'lucide-react';
 import { INITIAL_ALERTS } from '../../data/mockVessels';
 import CloudRelayModal from './CloudRelayModal';
@@ -66,19 +66,91 @@ export default function TopBar({
     return () => clearInterval(interval);
   }, []);
 
-  const filteredVessels = searchQuery.trim()
-    ? allVessels.filter(v => {
-        const q = searchQuery.toLowerCase();
-        return (
-          v.name?.toLowerCase().includes(q) ||
-          String(v.mmsi).includes(q) ||
-          String(v.imo || '').includes(q) ||
-          v.type?.toLowerCase().includes(q) ||
-          v.flag?.toLowerCase().includes(q) ||
-          v.lake?.toLowerCase().includes(q)
-        );
-      })
-    : [];
+  // Typo-tolerant Levenshtein edit distance
+  const levenshtein = (a, b) => {
+    if (Math.abs(a.length - b.length) > 2) return 99;
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        if (b.charAt(i - 1) === a.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+    return matrix[b.length][a.length];
+  };
+
+  const normalizeSearch = (str) =>
+    (str || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const matchSearchToken = (token, words, rawVesselFields) => {
+    for (const field of rawVesselFields) {
+      if (field && field.includes(token)) return true;
+    }
+    for (const w of words) {
+      if (token.length <= 2) {
+        if (w === token || (token.length === 2 && w.startsWith(token))) return true;
+      } else {
+        if (w.includes(token)) return true;
+        const maxDist = token.length >= 6 ? 2 : 1;
+        if (token.length >= 4 && w.length >= 4 && levenshtein(token, w) <= maxDist) return true;
+      }
+    }
+    return false;
+  };
+
+  const scoreVesselMatch = (v, qNorm) => {
+    const normName = normalizeSearch(v.name);
+    if (normName === qNorm) return 1000;
+    if (normName.startsWith(qNorm)) return 500;
+    if (normName.includes(qNorm)) return 300;
+    if (String(v.mmsi) === qNorm || String(v.imo) === qNorm) return 900;
+    if (v.is_great_lakes || v.strait === 'Great Lakes') return 150;
+    return 100;
+  };
+
+  const filteredVessels = useMemo(() => {
+    const rawQ = searchQuery.trim();
+    if (!rawQ) return [];
+
+    const qNorm = normalizeSearch(rawQ);
+    const qTokens = qNorm.split(' ').filter(Boolean);
+    if (qTokens.length === 0) return [];
+
+    const matches = [];
+    for (const v of allVessels) {
+      const vWords = normalizeSearch(v.name).split(' ');
+      const rawFields = [
+        String(v.mmsi || ''),
+        String(v.imo || ''),
+        (v.lake || '').toLowerCase(),
+        (v.flag || '').toLowerCase(),
+        (v.type || '').toLowerCase(),
+        (v.strait || '').toLowerCase(),
+      ];
+
+      const allTokensMatch = qTokens.every(tok => matchSearchToken(tok, vWords, rawFields));
+      if (allTokensMatch) {
+        matches.push(v);
+        if (matches.length >= 60) break;
+      }
+    }
+
+    matches.sort((a, b) => scoreVesselMatch(b, qNorm) - scoreVesselMatch(a, qNorm));
+    return matches;
+  }, [searchQuery, allVessels]);
 
   return (
     <header className="h-10 bg-[#e9eaec] border-b border-tactical-border flex items-center justify-between px-2 sm:px-3 text-tactical-text text-xs font-mono select-none z-40 gap-1.5 sm:gap-4 relative">
