@@ -30,40 +30,75 @@ CORS_HEADERS = {
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
 }
 
-alerts_db = [
-    {
-        "id": "alert-1",
-        "time": "14:12",
-        "title": "AIS GAP · 18M",
-        "vessel": "MV ORION",
-        "level": "CRIT",
-        "details": "Transponder signal dropped near northern choke passage"
-    },
-    {
-        "id": "alert-2",
-        "time": "14:05",
-        "title": "OFF-LANE · 0.4 NM",
-        "vessel": "SAM LAUD",
-        "level": "WARN",
-        "details": "Heading deviation along Lake Michigan TSS approach"
-    },
-    {
-        "id": "alert-3",
-        "time": "13:58",
-        "title": "SPEED DROP · -3.1 KN",
-        "vessel": "AMERICAN MARINER",
-        "level": "INFO",
-        "details": "Speed reduced entering St. Marys river"
-    },
-    {
-        "id": "alert-4",
-        "time": "13:41",
-        "title": "QUEUE +2 · DETROIT",
-        "vessel": "V-12, V-15",
-        "level": "INFO",
-        "details": "Vessel queue increased at Ambassador channel"
-    }
-]
+def get_active_alerts():
+    alerts = []
+    seen_mmsi = set()
+    for v in vessels_db.values():
+        name = v.get("name")
+        mmsi = v.get("mmsi")
+        if not name or not mmsi or mmsi in seen_mmsi:
+            continue
+        sog = float(v.get("sog", 0) or 0)
+        nav = str(v.get("nav_status", "")).lower()
+        strait = str(v.get("strait", "") or "")
+        vtype = str(v.get("type", "Commercial"))
+
+        # 1. Critical: Restricted manoeuvrability, not under command, aground
+        if "restricted" in nav or "not under command" in nav or "aground" in nav:
+            seen_mmsi.add(mmsi)
+            alerts.append({
+                "id": f"alert-{mmsi}",
+                "mmsi": mmsi,
+                "vessel": name,
+                "level": "CRIT",
+                "title": "RESTRICTED MANEUVER",
+                "details": f"{name} ({vtype}) navigating with restricted manoeuvrability in {strait or 'fairway'}",
+                "time": "Active",
+                "lat": v.get("lat"),
+                "lon": v.get("lon"),
+                "strait": strait,
+                "sog": sog
+            })
+            if len(alerts) >= 8:
+                break
+        # 2. Warning: Speed drop / stopped in active shipping fairway
+        elif strait and strait != "High Seas" and sog < 0.6 and "underway" in nav:
+            seen_mmsi.add(mmsi)
+            alerts.append({
+                "id": f"alert-{mmsi}",
+                "mmsi": mmsi,
+                "vessel": name,
+                "level": "WARN",
+                "title": f"SPEED DROP · {sog:.1f} KN",
+                "details": f"{name} reported near-zero speed while underway in {strait}",
+                "time": "Active",
+                "lat": v.get("lat"),
+                "lon": v.get("lon"),
+                "strait": strait,
+                "sog": sog
+            })
+            if len(alerts) >= 8:
+                break
+        # 3. Warning/Info: High transit speed in restricted fairway
+        elif strait and strait != "High Seas" and 16.5 < sog < 50.0:
+            seen_mmsi.add(mmsi)
+            alerts.append({
+                "id": f"alert-{mmsi}",
+                "mmsi": mmsi,
+                "vessel": name,
+                "level": "WARN" if sog > 18.0 else "INFO",
+                "title": f"HIGH SPEED · {sog:.1f} KN",
+                "details": f"{name} navigating at high velocity through {strait}",
+                "time": "Active",
+                "lat": v.get("lat"),
+                "lon": v.get("lon"),
+                "strait": strait,
+                "sog": sog
+            })
+            if len(alerts) >= 8:
+                break
+
+    return alerts[:6]
 
 def get_country_from_mmsi(mmsi):
     if not mmsi:
@@ -583,17 +618,18 @@ async def handle_get_vessel_photo(request):
     return web.json_response(result, headers=CORS_HEADERS)
 
 async def handle_get_stats(request):
+    current_alerts = get_active_alerts()
     return web.json_response({
         "wait_vsl": 14,
         "dwell_hrs": 6,
         "clear_hrs": 3,
         "delta_hrs": 2,
-        "active_alerts": len(alerts_db),
+        "active_alerts": len(current_alerts),
         "total_tracked": len(vessels_db)
     }, headers=CORS_HEADERS)
 
 async def handle_get_alerts(request):
-    return web.json_response(alerts_db, headers=CORS_HEADERS)
+    return web.json_response(get_active_alerts(), headers=CORS_HEADERS)
 
 async def websocket_handler(request):
     ws = web.WebSocketResponse(heartbeat=25.0)
@@ -608,7 +644,7 @@ async def websocket_handler(request):
             "type": "SNAPSHOT",
             "vessels": active_sample,
             "total_tracked": len(vessels_db),
-            "alerts": alerts_db,
+            "alerts": get_active_alerts(),
             "server_time": time.time()
         }))
     except Exception as e:

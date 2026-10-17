@@ -169,6 +169,7 @@ class AISClientService {
             if (data.last_updated) {
               this.lastSyncTime = data.last_updated;
             }
+            this.detectFleetAlerts();
             this.connected = true;
             this.hasPendingUpdates = true;
             this.scheduleBatchNotify();
@@ -202,12 +203,111 @@ class AISClientService {
           if (data.last_updated) {
             this.lastSyncTime = data.last_updated;
           }
+          this.detectFleetAlerts();
           this.connected = true;
           this.hasPendingUpdates = true;
           this.scheduleBatchNotify();
         }
       }
     } catch (e) {}
+  }
+
+  detectFleetAlerts() {
+    const list = Array.from(this.vessels.values());
+    if (list.length === 0) return;
+
+    const detected = [];
+    const seenMmsi = new Set();
+    const now = Date.now();
+
+    for (const v of list) {
+      if (!v || !v.mmsi || !v.name || seenMmsi.has(v.mmsi)) continue;
+      const sog = Number(v.sog || 0);
+      const nav = String(v.nav_status || '').toLowerCase();
+      const strait = String(v.strait || '');
+      const type = String(v.type || '');
+      const ts = v.last_updated_ts || (v.last_updated ? (v.last_updated > 1e11 ? v.last_updated : v.last_updated * 1000) : now);
+      const ageMins = Math.max(0, Math.floor((now - ts) / 60000));
+
+      // 1. CRITICAL: Restricted manoeuvrability, not under command, or aground
+      if (nav.includes('restricted') || nav.includes('not under command') || nav.includes('aground')) {
+        seenMmsi.add(v.mmsi);
+        detected.push({
+          id: `alert-${v.mmsi}`,
+          mmsi: v.mmsi,
+          vessel: v.name,
+          level: 'CRIT',
+          title: 'RESTRICTED MANEUVER',
+          details: `${v.name} (${type || 'Commercial'}) broadcasting restricted manoeuvrability in ${strait || 'fairway'}.`,
+          time: ageMins < 2 ? 'Just now' : `${ageMins}m ago`,
+          lat: v.lat,
+          lon: v.lon,
+          strait: strait,
+          sog: sog
+        });
+        if (detected.length >= 8) break;
+      }
+      // 2. WARN: Near-zero speed while underway in a designated fairway/strait
+      else if (strait && strait !== 'High Seas' && sog < 0.6 && nav.includes('underway')) {
+        seenMmsi.add(v.mmsi);
+        detected.push({
+          id: `alert-${v.mmsi}`,
+          mmsi: v.mmsi,
+          vessel: v.name,
+          level: 'WARN',
+          title: `SPEED DROP · ${sog.toFixed(1)} KN`,
+          details: `${v.name} halted or drifting at near-zero speed in ${strait} corridor.`,
+          time: ageMins < 2 ? 'Just now' : `${ageMins}m ago`,
+          lat: v.lat,
+          lon: v.lon,
+          strait: strait,
+          sog: sog
+        });
+        if (detected.length >= 8) break;
+      }
+      // 3. WARN/INFO: Rapid transit in congested fairway (> 16.5 KN & < 45 KN)
+      else if (strait && strait !== 'High Seas' && sog > 16.5 && sog < 45.0 && (type.includes('Cargo') || type.includes('Tanker') || type.includes('Commercial'))) {
+        seenMmsi.add(v.mmsi);
+        detected.push({
+          id: `alert-${v.mmsi}`,
+          mmsi: v.mmsi,
+          vessel: v.name,
+          level: sog > 18.0 ? 'WARN' : 'INFO',
+          title: `HIGH SPEED · ${sog.toFixed(1)} KN`,
+          details: `${v.name} conducting high-speed transit through congested ${strait}.`,
+          time: ageMins < 2 ? 'Just now' : `${ageMins}m ago`,
+          lat: v.lat,
+          lon: v.lon,
+          strait: strait,
+          sog: sog
+        });
+        if (detected.length >= 8) break;
+      }
+      // 4. INFO: Active Towing Operations in fairway
+      else if (type.includes('Tug') && sog > 1.0 && strait && strait !== 'High Seas') {
+        seenMmsi.add(v.mmsi);
+        detected.push({
+          id: `alert-${v.mmsi}`,
+          mmsi: v.mmsi,
+          vessel: v.name,
+          level: 'INFO',
+          title: `TOWING OPS · ${sog.toFixed(1)} KN`,
+          details: `${v.name} active towing operation in ${strait} shipping lane.`,
+          time: ageMins < 2 ? 'Just now' : `${ageMins}m ago`,
+          lat: v.lat,
+          lon: v.lon,
+          strait: strait,
+          sog: sog
+        });
+        if (detected.length >= 8) break;
+      }
+    }
+
+    if (detected.length > 0) {
+      const priority = { CRIT: 0, WARN: 1, INFO: 2 };
+      detected.sort((a, b) => priority[a.level] - priority[b.level]);
+      this.alerts = detected.slice(0, 8);
+    }
   }
 
   wakeUpRelay(targetUrl) {
@@ -319,8 +419,10 @@ class AISClientService {
                 this.vessels.set(v.mmsi, v);
               }
             });
-            if (msg.alerts) {
+            if (msg.alerts && Array.isArray(msg.alerts) && msg.alerts.length > 0) {
               this.alerts = msg.alerts;
+            } else {
+              this.detectFleetAlerts();
             }
             this.hasPendingUpdates = true;
             this.scheduleBatchNotify();
@@ -336,6 +438,7 @@ class AISClientService {
                 this.vessels.set(v.mmsi, { ...(existing || {}), ...v, last_updated_ts: ts || now });
               }
             });
+            this.detectFleetAlerts();
             this.hasPendingUpdates = true;
             this.scheduleBatchNotify();
           } else if (msg.type === 'VESSEL_UPDATE' && msg.vessel?.mmsi) {

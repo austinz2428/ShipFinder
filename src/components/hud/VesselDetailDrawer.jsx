@@ -1,14 +1,15 @@
 import React, { useRef, useEffect, useState } from 'react';
 import L from 'leaflet';
 import {
-  X, Mountain, Navigation, Copy, Check, MapPin, Compass, Ship, Anchor, Clock
+  X, Mountain, Navigation, Copy, Check, MapPin, Compass, Ship, Anchor, Clock, AlertTriangle
 } from 'lucide-react';
 
 export default function VesselDetailDrawer({
   vessel,
   onClose,
   onSwitchToTopographical,
-  onCenterMap
+  onCenterMap,
+  alerts = []
 }) {
   const drawerRef = useRef(null);
   const [copied, setCopied] = useState(false);
@@ -123,6 +124,35 @@ export default function VesselDetailDrawer({
           scrollbarColor: '#cbd5e1 transparent'
         }}
       >
+        {/* Active Maritime Alert Banner if present */}
+        {(() => {
+          const activeAlert = (alerts || []).find(
+            (a) => a.mmsi === vessel?.mmsi || (a.mmsi && String(a.mmsi) === String(vessel?.mmsi)) || a.vessel === vessel?.name
+          );
+          if (!activeAlert) return null;
+          return (
+            <div className={`p-3 rounded-lg border flex items-start gap-2.5 shadow-xs ${
+              activeAlert.level === 'CRIT'
+                ? 'bg-red-500/10 border-red-500/30 text-red-900'
+                : activeAlert.level === 'WARN'
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-900'
+                : 'bg-blue-500/10 border-blue-500/30 text-blue-900'
+            }`}>
+              <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${
+                activeAlert.level === 'CRIT' ? 'text-red-600' : 'text-amber-600'
+              }`} />
+              <div className="flex flex-col gap-0.5">
+                <div className="font-bold text-[11px] tracking-wide flex items-center gap-1.5">
+                  <span>🚨 {activeAlert.level} · {activeAlert.title}</span>
+                </div>
+                <div className="text-[10px] opacity-90 leading-snug">
+                  {activeAlert.details}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Vessel Name & Flag Card */}
         <div className="bg-white p-3 rounded-lg border border-tactical-border shadow-sm flex items-center justify-between">
           <div className="flex flex-col gap-0.5 truncate">

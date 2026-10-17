@@ -15,38 +15,5 @@ export const CHOKEPOINTS = [
 
 export const INITIAL_VESSELS = [];
 
-export const INITIAL_ALERTS = [
-  {
-    id: "alert-1",
-    time: "14:12",
-    title: "AIS GAP · 18M",
-    vessel: "MV ORION",
-    level: "CRIT",
-    details: "Transponder ping dropped near northern choke passage"
-  },
-  {
-    id: "alert-2",
-    time: "14:05",
-    title: "OFF-LANE · 0.4 NM",
-    vessel: "SAM LAUD",
-    level: "WARN",
-    details: "Heading deviation along Lake Michigan TSS approach"
-  },
-  {
-    id: "alert-3",
-    time: "13:58",
-    title: "SPEED DROP · -3.1 KN",
-    vessel: "AMERICAN MARINER",
-    level: "INFO",
-    details: "Speed reduced entering St. Marys river"
-  },
-  {
-    id: "alert-4",
-    time: "13:41",
-    title: "QUEUE +2 · DETROIT",
-    vessel: "V-12, V-15",
-    level: "INFO",
-    details: "Vessel queue increased at Ambassador channel"
-  }
-];
+export const INITIAL_ALERTS = [];
 

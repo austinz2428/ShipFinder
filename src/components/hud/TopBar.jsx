@@ -43,7 +43,7 @@ export default function TopBar({
     };
   }, []);
 
-  const displayAlerts = (alerts && alerts.length > 0) ? alerts : INITIAL_ALERTS;
+  const displayAlerts = alerts || [];
 
   useEffect(() => {
     const updateTime = () => {
@@ -235,7 +235,9 @@ export default function TopBar({
             className={`flex items-center px-2 py-1 rounded text-[10px] sm:text-[11px] font-bold tracking-wider transition-all shadow-sm ${
               showAlertsDropdown
                 ? 'bg-[#b91c1c] text-white ring-2 ring-red-400'
-                : 'bg-tactical-orange hover:bg-[#e03d07] text-white active:scale-95'
+                : displayAlerts.length > 0
+                ? 'bg-tactical-orange hover:bg-[#e03d07] text-white active:scale-95'
+                : 'bg-[#4b5563] text-gray-200 hover:bg-[#374151] active:scale-95'
             }`}
             title="Toggle Live Maritime Alerts Feed"
           >
@@ -248,13 +250,13 @@ export default function TopBar({
 
           {/* Tactical Alerts Dropdown Panel */}
           {showAlertsDropdown && (
-            <div className="absolute right-0 top-full mt-2 w-80 max-w-[90vw] bg-white border border-tactical-border shadow-2xl rounded-lg z-50 overflow-hidden font-mono text-xs flex flex-col animate-in fade-in zoom-in-95 duration-100">
+            <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 max-w-[92vw] bg-white border border-tactical-border shadow-2xl rounded-lg z-50 overflow-hidden font-mono text-xs flex flex-col animate-in fade-in zoom-in-95 duration-100">
               {/* Header */}
               <div className="bg-[#1e232d] text-white px-3 py-2 flex items-center justify-between border-b border-gray-700">
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                  <span className={`w-2 h-2 rounded-full ${displayAlerts.length > 0 ? 'bg-red-500 animate-ping' : 'bg-emerald-400'}`} />
                   <span className="font-bold text-[11px] tracking-wider uppercase">
-                    MARITIME ALERTS
+                    MARITIME SAFETY ALERTS
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -272,62 +274,85 @@ export default function TopBar({
               </div>
 
               {/* Alert Feed List */}
-              <div className="max-h-72 overflow-y-auto divide-y divide-gray-100 p-1">
-                {displayAlerts.map((alert) => {
-                  const isCrit = alert.level === 'CRIT';
-                  const isWarn = alert.level === 'WARN';
-
-                  return (
-                    <div
-                      key={alert.id}
-                      onClick={() => {
-                        const targetVessel = allVessels.find(
-                          (v) =>
-                            v.name === alert.vessel ||
-                            v.name?.includes(alert.vessel) ||
-                            String(v.mmsi) === String(alert.vessel)
-                        );
-                        if (targetVessel && onSelectVessel) {
-                          onSelectVessel(targetVessel);
-                        }
-                        setShowAlertsDropdown(false);
-                      }}
-                      className="p-2.5 hover:bg-orange-50/70 cursor-pointer rounded transition-colors flex flex-col gap-1"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span
-                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
-                            isCrit
-                              ? 'bg-red-100 text-red-700 border border-red-300'
-                              : isWarn
-                              ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                              : 'bg-blue-100 text-blue-700 border border-blue-300'
-                          }`}
-                        >
-                          {alert.level} · {alert.title}
-                        </span>
-                        <span className="text-[10px] text-gray-400 font-mono">
-                          {alert.time}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-0.5">
-                        <span className="font-bold text-[11px] text-gray-900">
-                          {alert.vessel}
-                        </span>
-                        <span className="text-[10px] text-tactical-orange hover:underline font-semibold">
-                          VIEW ON MAP →
-                        </span>
-                      </div>
-
-                      {alert.details && (
-                        <div className="text-[10px] text-gray-500 leading-snug">
-                          {alert.details}
-                        </div>
-                      )}
+              <div className="max-h-80 overflow-y-auto divide-y divide-gray-100 p-1">
+                {displayAlerts.length === 0 ? (
+                  <div className="p-4 text-center flex flex-col items-center justify-center gap-2 text-gray-600">
+                    <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold text-xs">
+                      ✓
                     </div>
-                  );
-                })}
+                    <span className="font-bold text-xs text-gray-800">ALL FAIRWAYS CLEAR</span>
+                    <span className="text-[10px] text-gray-500 max-w-[240px] leading-relaxed">
+                      Zero critical navigational anomalies detected. All 25,000 vessels operating within safety standards.
+                    </span>
+                  </div>
+                ) : (
+                  displayAlerts.map((alert) => {
+                    const isCrit = alert.level === 'CRIT';
+                    const isWarn = alert.level === 'WARN';
+
+                    return (
+                      <div
+                        key={alert.id}
+                        onClick={() => {
+                          const targetVessel = allVessels.find(
+                            (v) =>
+                              v.mmsi === alert.mmsi ||
+                              (alert.mmsi && String(v.mmsi) === String(alert.mmsi)) ||
+                              v.name?.toLowerCase() === alert.vessel?.toLowerCase() ||
+                              v.name?.toLowerCase().includes(alert.vessel?.toLowerCase())
+                          );
+                          if (targetVessel && onSelectVessel) {
+                            if (currentView !== 'map' && onToggleView) {
+                              onToggleView('map');
+                            }
+                            onSelectVessel(targetVessel, true);
+                          }
+                          setShowAlertsDropdown(false);
+                        }}
+                        className="p-2.5 hover:bg-orange-50/70 cursor-pointer rounded transition-colors flex flex-col gap-1 border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                              isCrit
+                                ? 'bg-red-100 text-red-700 border border-red-300'
+                                : isWarn
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : 'bg-blue-100 text-blue-700 border border-blue-300'
+                            }`}
+                          >
+                            {alert.level} · {alert.title}
+                          </span>
+                          <span className="text-[10px] text-gray-400 font-mono">
+                            {alert.time || 'Live'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-0.5">
+                          <div className="flex items-center gap-1.5 truncate max-w-[200px]">
+                            <span className="font-bold text-[11px] text-gray-900 truncate">
+                              {alert.vessel}
+                            </span>
+                            {alert.strait && alert.strait !== 'High Seas' && (
+                              <span className="text-[9px] px-1 py-0.2 bg-gray-100 text-gray-600 rounded font-semibold shrink-0">
+                                {alert.strait}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-tactical-orange hover:underline font-bold shrink-0">
+                            LOCATE ON MAP →
+                          </span>
+                        </div>
+
+                        {alert.details && (
+                          <div className="text-[10px] text-gray-500 leading-snug">
+                            {alert.details}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
