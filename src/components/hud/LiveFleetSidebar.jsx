@@ -20,6 +20,24 @@ function getVesselColor(type) {
   return TYPE_COLORS.other;
 }
 
+function getPingAgeString(v) {
+  if (!v) return 'LIVE';
+  const now = Date.now();
+  let ts = v.last_updated_ts;
+  if (!ts && v.last_updated) {
+    ts = v.last_updated > 1e11 ? v.last_updated : v.last_updated * 1000;
+  }
+  if (!ts && v.time_utc) {
+    try { ts = new Date(v.time_utc).getTime(); } catch (e) {}
+  }
+  if (!ts) return 'LIVE';
+  const diffSec = Math.max(0, Math.floor((now - ts) / 1000));
+  if (diffSec < 60) return `${diffSec}s`;
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h`;
+  return `${Math.floor(diffSec / 86400)}d`;
+}
+
 export default function LiveFleetSidebar({
   vessels = [],
   selectedVessel,
@@ -181,6 +199,7 @@ export default function LiveFleetSidebar({
           const color = getVesselColor(v.type);
           const lengthFt = Math.round((v.length || 0) * 3.28084);
           const widthFt = Math.round((v.width || 0) * 3.28084);
+          const pingStr = getPingAgeString(v);
 
           return (
             <div
@@ -229,11 +248,14 @@ export default function LiveFleetSidebar({
 
               {/* Live Speed & Status */}
               <div className="flex flex-col items-end flex-shrink-0 text-right">
-                <span className={`font-bold text-[10px] ${isUnderway ? 'text-emerald-700 font-bold' : 'text-tactical-dim'}`}>
-                  {v.sog || 0} KN
-                </span>
+                <div className="flex items-center gap-1">
+                  <span className={`w-1.5 h-1.5 rounded-full ${isUnderway ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+                  <span className={`font-bold text-[10px] ${isUnderway ? 'text-emerald-700 font-bold' : 'text-tactical-dim'}`}>
+                    {v.sog || 0} KN
+                  </span>
+                </div>
                 <span className="text-[8px] text-tactical-dim">
-                  {v.lake || v.strait || `${v.heading || v.cog || 0}°T`}
+                  {v.lake || v.strait || `${v.heading || v.cog || 0}°T`} · {pingStr}
                 </span>
               </div>
             </div>

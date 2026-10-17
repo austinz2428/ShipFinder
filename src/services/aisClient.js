@@ -145,8 +145,14 @@ class AISClientService {
           const list = Array.isArray(data) ? data : (data.vessels || []);
           if (list.length > 0) {
             console.log(`[AISClient] Loaded ${list.length.toLocaleString()} vessels from ${url}`);
+            const now = Date.now();
             list.forEach(v => {
               if (v && v.mmsi) {
+                let ts = v.last_updated ? (v.last_updated > 1e11 ? v.last_updated : v.last_updated * 1000) : null;
+                if (!ts && v.time_utc) {
+                  try { ts = new Date(v.time_utc).getTime(); } catch (e) {}
+                }
+                v.last_updated_ts = ts || now;
                 this.vessels.set(v.mmsi, v);
               }
             });
@@ -172,10 +178,15 @@ class AISClientService {
         const data = await res.json();
         const list = Array.isArray(data) ? data : (data.vessels || []);
         if (list.length > 0) {
+          const now = Date.now();
           list.forEach(v => {
             if (v && v.mmsi) {
               const existing = this.vessels.get(v.mmsi);
-              this.vessels.set(v.mmsi, { ...(existing || {}), ...v });
+              let ts = v.last_updated ? (v.last_updated > 1e11 ? v.last_updated : v.last_updated * 1000) : null;
+              if (!ts && v.time_utc) {
+                try { ts = new Date(v.time_utc).getTime(); } catch (e) {}
+              }
+              this.vessels.set(v.mmsi, { ...(existing || {}), ...v, last_updated_ts: ts || now });
             }
           });
           if (data.last_updated) {
@@ -253,8 +264,14 @@ class AISClientService {
           }
 
           if (msg.type === 'SNAPSHOT' && Array.isArray(msg.vessels)) {
+            const now = Date.now();
             msg.vessels.forEach(v => {
               if (v && v.mmsi) {
+                let ts = v.last_updated ? (v.last_updated > 1e11 ? v.last_updated : v.last_updated * 1000) : null;
+                if (!ts && v.time_utc) {
+                  try { ts = new Date(v.time_utc).getTime(); } catch (e) {}
+                }
+                v.last_updated_ts = ts || now;
                 this.vessels.set(v.mmsi, v);
               }
             });
@@ -264,10 +281,15 @@ class AISClientService {
             this.hasPendingUpdates = true;
             this.scheduleBatchNotify();
           } else if (msg.type === 'VESSEL_BATCH' && Array.isArray(msg.vessels)) {
+            const now = Date.now();
             msg.vessels.forEach(v => {
               if (v && v.mmsi) {
                 const existing = this.vessels.get(v.mmsi);
-                this.vessels.set(v.mmsi, { ...(existing || {}), ...v });
+                let ts = v.last_updated ? (v.last_updated > 1e11 ? v.last_updated : v.last_updated * 1000) : null;
+                if (!ts && v.time_utc) {
+                  try { ts = new Date(v.time_utc).getTime(); } catch (e) {}
+                }
+                this.vessels.set(v.mmsi, { ...(existing || {}), ...v, last_updated_ts: ts || now });
               }
             });
             this.hasPendingUpdates = true;
@@ -275,7 +297,12 @@ class AISClientService {
           } else if (msg.type === 'VESSEL_UPDATE' && msg.vessel?.mmsi) {
             const v = msg.vessel;
             const existing = this.vessels.get(v.mmsi);
-            this.vessels.set(v.mmsi, { ...(existing || {}), ...v });
+            const now = Date.now();
+            let ts = v.last_updated ? (v.last_updated > 1e11 ? v.last_updated : v.last_updated * 1000) : null;
+            if (!ts && v.time_utc) {
+              try { ts = new Date(v.time_utc).getTime(); } catch (e) {}
+            }
+            this.vessels.set(v.mmsi, { ...(existing || {}), ...v, last_updated_ts: ts || now });
             this.hasPendingUpdates = true;
             this.scheduleBatchNotify();
           }
@@ -320,23 +347,14 @@ class AISClientService {
 
   startLiveSimulation() {
     if (this.simInterval) return;
-    // Dead-reckoning: smoothly advances moving vessels in real-time along their course & speed
+    // Ground-Truth Real-Time Mode (VesselFinder-accurate):
+    // Vessels stay pinned to genuine GPS coordinates broadcast by real AIS transponders.
+    // Positions only update when authentic AIS packets arrive from the ship.
+    // Periodic timer refreshes "Last Report" timestamps smoothly every 5 seconds.
     this.simInterval = setInterval(() => {
-      let changed = false;
-      this.vessels.forEach(v => {
-        if (v.sog && v.sog >= 0.5) {
-          const cogRad = ((v.cog || v.heading || 0) * Math.PI) / 180;
-          const speedFactor = v.sog * 0.000004;
-          v.lat += Math.cos(cogRad) * speedFactor;
-          v.lon += Math.sin(cogRad) * speedFactor;
-          changed = true;
-        }
-      });
-      if (changed) {
-        this.hasPendingUpdates = true;
-        this.scheduleBatchNotify();
-      }
-    }, 2000);
+      this.hasPendingUpdates = true;
+      this.scheduleBatchNotify();
+    }, 5000);
   }
 }
 
