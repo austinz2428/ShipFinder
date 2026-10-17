@@ -65,11 +65,79 @@ function getPingAge(v) {
   return { label: `${Math.floor(diffSec / 86400)}d ago`, isRecent: false };
 }
 
+function formatLocationPingMessage(v) {
+  if (!v) return { title: 'Location: Just now', subtitle: 'Live AIS transponder ping', dot: '🟢', isRecent: true };
+  const now = Date.now();
+  let ts = v.last_updated_ts;
+  if (!ts && v.last_updated) {
+    ts = v.last_updated > 1e11 ? v.last_updated : v.last_updated * 1000;
+  }
+  if (!ts && v.time_utc) {
+    try { ts = new Date(v.time_utc).getTime(); } catch (e) {}
+  }
+  if (!ts) return { title: 'Location: Just now', subtitle: 'Live GPS transponder', dot: '🟢', isRecent: true };
+
+  const diffSec = Math.max(0, Math.floor((now - ts) / 1000));
+  const sog = v.sog || 0;
+  const status = v.nav_status || (sog >= 0.5 ? `${sog} KN` : 'Moored');
+
+  if (diffSec < 45) {
+    return {
+      title: `Location: Just now (${diffSec}s ago)`,
+      subtitle: `${status} · Real-time GPS`,
+      dot: '🟢',
+      isRecent: true
+    };
+  }
+  if (diffSec < 90) {
+    return {
+      title: `Location: 1 minute ago`,
+      subtitle: `${status} · Live AIS transponder`,
+      dot: '🟢',
+      isRecent: true
+    };
+  }
+  if (diffSec < 3600) {
+    const mins = Math.floor(diffSec / 60);
+    return {
+      title: `Location: ${mins} minute${mins === 1 ? '' : 's'} ago`,
+      subtitle: `${status} · Real AIS ping`,
+      dot: mins <= 15 ? '🟢' : '🟡',
+      isRecent: mins <= 15
+    };
+  }
+  if (diffSec < 7200) {
+    return {
+      title: `Location: 1 hour ago`,
+      subtitle: `${status} · Stored AIS ping`,
+      dot: '⚪',
+      isRecent: false
+    };
+  }
+  if (diffSec < 86400) {
+    const hrs = Math.floor(diffSec / 3600);
+    return {
+      title: `Location: ${hrs} hours ago`,
+      subtitle: `${status} · Transponder fix`,
+      dot: '⚪',
+      isRecent: false
+    };
+  }
+  const days = Math.floor(diffSec / 86400);
+  return {
+    title: `Location: ${days} day${days === 1 ? '' : 's'} ago`,
+    subtitle: `${status} · Historical fix`,
+    dot: '⚪',
+    isRecent: false
+  };
+}
+
 export default function GlobalMapView({
   vessels = [],
   selectedVessel,
   onSelectVessel,
   onSwitchToTopographical,
+  onOpenDrawer,
   layers = { tracks: true, anchorage: true }
 }) {
   const mapContainerRef = useRef(null);
@@ -202,37 +270,86 @@ export default function GlobalMapView({
         ctx.lineTo(point.x + boxSize, point.y + boxSize - 6);
         ctx.stroke();
 
-        // Popup Tag Box: e.g. "SAM LAUD" / "🟢 14s ago · 12.4 KN"
-        const labelX = point.x + boxSize + 6;
-        const labelY = point.y - boxSize + 2;
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-        ctx.strokeStyle = '#cbd5e1';
-        ctx.lineWidth = 1.0;
-
-        const text1 = v.name || 'VESSEL';
-        const ping = getPingAge(v);
-        const text2 = `${ping.isRecent ? '🟢' : '🟡'} ${ping.label} · ${v.sog || 0} KN`;
+        // Speech Bubble Callout directly ABOVE the vessel marker
+        const pingMsg = formatLocationPingMessage(v);
+        const nameText = v.name || 'VESSEL';
+        const line1 = `${pingMsg.dot} ${pingMsg.title}`;
+        const line2 = `${nameText} · ${pingMsg.subtitle}`;
 
         ctx.font = 'bold 11px JetBrains Mono, monospace';
-        const tWidth1 = ctx.measureText(text1).width;
-        ctx.font = '9px JetBrains Mono, monospace';
-        const tWidth2 = ctx.measureText(text2).width;
-        const boxW = Math.max(tWidth1, tWidth2) + 16;
-        const boxH = 32;
+        const w1 = ctx.measureText(line1).width;
+        ctx.font = '10px JetBrains Mono, monospace';
+        const w2 = ctx.measureText(line2).width;
 
-        ctx.fillRect(labelX, labelY - 4, boxW, boxH);
-        ctx.strokeRect(labelX, labelY - 4, boxW, boxH);
+        const padX = 12;
+        const boxW = Math.max(w1, w2) + padX * 2;
+        const boxH = 40;
+        const arrowH = 8;
 
-        // Vessel Name
-        ctx.fillStyle = '#0f172a';
+        // Horizontally center directly above the vessel point.x
+        let boxX = Math.round(point.x - boxW / 2);
+        boxX = Math.max(8, Math.min(width - boxW - 8, boxX));
+
+        // Place directly ABOVE the reticle and ship marker
+        let boxY = Math.round(point.y - boxSize - boxH - arrowH - 4);
+        let arrowPointsDown = true;
+
+        // If too close to top edge of viewport, flip below
+        if (boxY < 12) {
+          boxY = Math.round(point.y + boxSize + arrowH + 4);
+          arrowPointsDown = false;
+        }
+
+        // Draw Callout Box with soft shadow
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetY = 3;
+
+        ctx.fillStyle = '#0f172a'; // Deep Navy Slate
+        ctx.beginPath();
+        const r = 6;
+        ctx.moveTo(boxX + r, boxY);
+        ctx.lineTo(boxX + boxW - r, boxY);
+        ctx.quadraticCurveTo(boxX + boxW, boxY, boxX + boxW, boxY + r);
+        ctx.lineTo(boxX + boxW, boxY + boxH - r);
+        ctx.quadraticCurveTo(boxX + boxW, boxY + boxH, boxX + boxW - r, boxY + boxH);
+        ctx.lineTo(boxX + r, boxY + boxH);
+        ctx.quadraticCurveTo(boxX, boxY + boxH, boxX, boxY + boxH - r);
+        ctx.lineTo(boxX, boxY + r);
+        ctx.quadraticCurveTo(boxX, boxY, boxX + r, boxY);
+        ctx.closePath();
+        ctx.fill();
+
+        // Speech bubble triangular pointer pointing directly at the ship marker
+        ctx.beginPath();
+        if (arrowPointsDown) {
+          ctx.moveTo(point.x - 7, boxY + boxH);
+          ctx.lineTo(point.x, boxY + boxH + arrowH);
+          ctx.lineTo(point.x + 7, boxY + boxH);
+        } else {
+          ctx.moveTo(point.x - 7, boxY);
+          ctx.lineTo(point.x, boxY - arrowH);
+          ctx.lineTo(point.x + 7, boxY);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        // Border around callout
+        ctx.strokeStyle = pingMsg.isRecent ? '#10b981' : '#f59e0b';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Text Line 1: e.g. "🟢 Location: Just now (14s ago)"
+        ctx.fillStyle = pingMsg.isRecent ? '#34d399' : '#fbbf24';
         ctx.font = 'bold 11px JetBrains Mono, monospace';
-        ctx.fillText(text1, labelX + 8, labelY + 11);
+        ctx.fillText(line1, boxX + padX, boxY + 16);
 
-        // Ping Age & Speed
-        ctx.fillStyle = ping.isRecent ? '#047857' : '#64748b';
-        ctx.font = '9px JetBrains Mono, monospace';
-        ctx.fillText(text2, labelX + 8, labelY + 23);
+        // Text Line 2: e.g. "SAM LAUD · Moving at 12.4 KN"
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = '10px JetBrains Mono, monospace';
+        ctx.fillText(line2, boxX + padX, boxY + 31);
       }
     });
   }, [filterType]);
@@ -312,12 +429,13 @@ export default function GlobalMapView({
       }
     });
 
-    // Click on Map to Select Vessel
+    // Click or Tap on Map to Select Vessel (Optimized for Mobile Fingers & Desktop Clicks)
     map.on('click', (e) => {
       const mouseX = e.containerPoint.x;
       const mouseY = e.containerPoint.y;
       let clicked = null;
-      let minDist = 18;
+      const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || ('ontouchstart' in window) || (navigator.maxTouchPoints > 0));
+      let minDist = isMobile ? 36 : 22;
       const list = vesselsRef.current || [];
 
       for (const v of list) {
@@ -524,15 +642,25 @@ export default function GlobalMapView({
             </div>
           </div>
 
-          <div className="hidden sm:block h-7 w-px bg-tactical-border shrink-0" />
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+            {onOpenDrawer && (
+              <button
+                onClick={onOpenDrawer}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1 bg-gray-100 hover:bg-gray-200 text-tactical-text border border-tactical-border px-3 py-1.5 sm:py-2 rounded font-semibold text-[11px] sm:text-xs font-mono uppercase transition-all active:scale-95 shrink-0"
+              >
+                <span>DETAILS</span>
+                <span>📋</span>
+              </button>
+            )}
 
-          <button
-            onClick={onSwitchToTopographical}
-            className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-tactical-orange hover:bg-[#e03d07] text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded font-semibold text-[11px] sm:text-xs font-mono tracking-wider uppercase transition-all shadow-md active:scale-95 shrink-0"
-          >
-            <span>ENTER 3D VIEW</span>
-            <span>➔</span>
-          </button>
+            <button
+              onClick={onSwitchToTopographical}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-tactical-orange hover:bg-[#e03d07] text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded font-semibold text-[11px] sm:text-xs font-mono tracking-wider uppercase transition-all shadow-md active:scale-95 shrink-0"
+            >
+              <span>3D VIEW</span>
+              <span>➔</span>
+            </button>
+          </div>
         </div>
       )}
     </div>
