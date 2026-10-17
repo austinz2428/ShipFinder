@@ -11,8 +11,8 @@ export default function App() {
   const [vessels, setVessels] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [selectedVessel, setSelectedVessel] = useState(null);
-  const [showDrawer, setShowDrawer] = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showDrawer, setShowDrawer] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 768 : true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
   const [latency, setLatency] = useState(82);
   const [searchQuery, setSearchQuery] = useState('');
   const [feedMode, setFeedMode] = useState('CRON_SNAPSHOT');
@@ -63,6 +63,9 @@ export default function App() {
   const handleSelectVessel = (vessel) => {
     setSelectedVessel(vessel);
     setShowDrawer(true);
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setSidebarCollapsed(true);
+    }
   };
 
   const handleSwitchToTopographical = () => {
@@ -71,7 +74,7 @@ export default function App() {
   };
 
   return (
-    <div className={`w-screen h-screen flex flex-col overflow-hidden font-mono ${
+    <div className={`w-full h-full min-h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden font-mono ${
       layers.aisDark ? 'bg-[#14171d] text-[#e0e4ec]' : 'bg-[#e9eaec] text-[#111317]'
     }`}>
       {/* 1. Top Bar */}
@@ -105,6 +108,14 @@ export default function App() {
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
 
+        {/* Mobile Backdrop when Sidebar Open */}
+        {!sidebarCollapsed && (
+          <div
+            className="sm:hidden fixed inset-0 bg-black/60 z-35 backdrop-blur-xs"
+            onClick={() => setSidebarCollapsed(true)}
+          />
+        )}
+
         {/* Center: Full-Height Viewport */}
         <main className="flex-1 h-full min-h-0 relative overflow-hidden">
           {currentView === 'map' ? (
@@ -126,7 +137,18 @@ export default function App() {
             />
           )}
 
-          {/* Right Side: Real Vessel Details Drawer */}
+          {/* Mobile Floating Fleet Button */}
+          {sidebarCollapsed && currentView === 'map' && (
+            <button
+              onClick={() => setSidebarCollapsed(false)}
+              className="sm:hidden absolute bottom-3 left-3 z-25 bg-[#111317]/95 text-white border border-gray-700 px-3.5 py-1.5 rounded-full shadow-xl text-[11px] font-bold flex items-center gap-1.5 active:scale-95 transition-all"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>FLEET ({vessels.length.toLocaleString()})</span>
+            </button>
+          )}
+
+          {/* Right Side / Bottom Sheet: Real Vessel Details Drawer */}
           {showDrawer && selectedVessel && (
             <VesselDetailDrawer
               vessel={selectedVessel}

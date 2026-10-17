@@ -167,7 +167,7 @@ export default function MiniGpsScreen({
   }
 
   return (
-    <div className="absolute top-16 right-6 z-30 w-80 bg-white/95 backdrop-blur-md border border-tactical-border rounded shadow-2xl overflow-hidden flex flex-col font-mono text-xs select-none">
+    <div className="absolute top-14 sm:top-16 right-2 sm:right-6 z-30 w-56 sm:w-80 max-w-[calc(100vw-1rem)] bg-white/95 backdrop-blur-md border border-tactical-border rounded-lg shadow-2xl overflow-hidden flex flex-col font-mono text-xs select-none">
       {/* Header Bar */}
       <div className="p-2 border-b border-tactical-border flex items-center justify-between bg-gray-50/80">
         <div className="flex items-center gap-1.5 overflow-hidden">
@@ -218,7 +218,7 @@ export default function MiniGpsScreen({
       </div>
 
       {/* Map Viewport */}
-      <div className="relative w-full h-52 bg-[#bdd7ee]">
+      <div className="relative w-full h-32 sm:h-52 bg-[#bdd7ee]">
         <div ref={mapContainerRef} className="w-full h-full z-0" />
 
         {/* Reticle Guideline in center */}

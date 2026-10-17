@@ -73,12 +73,16 @@ export default function TopBar({
     : [];
 
   return (
-    <header className="h-10 bg-[#e9eaec] border-b border-tactical-border flex items-center justify-between px-3 text-tactical-text text-xs font-mono select-none z-40">
-      {/* Left: Tactical Breadcrumbs */}
-      <div className="flex items-center gap-3">
+    <header className="h-10 bg-[#e9eaec] border-b border-tactical-border flex items-center justify-between px-2 sm:px-3 text-tactical-text text-xs font-mono select-none z-40 gap-1.5 sm:gap-4 overflow-hidden">
+      {/* Left: Tactical Breadcrumbs / Title */}
+      <div className="flex items-center gap-2 shrink-0">
+        {/* Mobile Brand */}
+        <span className="md:hidden font-bold text-tactical-orange text-[11px]">
+          ShipFinder
+        </span>
 
-        {/* Tactical Breadcrumbs */}
-        <div className="flex items-center gap-1 font-medium tracking-tight text-[11px] text-tactical-text">
+        {/* Desktop Breadcrumbs */}
+        <div className="hidden md:flex items-center gap-1 font-medium tracking-tight text-[11px] text-tactical-text">
           <span className="font-semibold text-tactical-orange">ShipFinder 3D Fairway</span>
           <span className="text-tactical-dim">/</span>
           <span className="text-tactical-muted">{selectedVessel?.strait || 'Waterway Sector'}</span>
@@ -92,41 +96,43 @@ export default function TopBar({
         </div>
       </div>
 
-      {/* Center: View Mode Toggle (Two Clean Tabs: Live Map <-> 3D Topo Strait) */}
-      <div className="flex items-center bg-[#dbdee3] p-0.5 rounded border border-tactical-borderDark/40">
+      {/* Center: View Mode Toggle (Map <-> 3D) */}
+      <div className="flex items-center bg-[#dbdee3] p-0.5 rounded border border-tactical-borderDark/40 shrink-0">
         <button
           onClick={() => onToggleView('map')}
-          className={`flex items-center gap-1.5 px-3 py-1 rounded text-[11px] transition-all ${
+          className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 rounded text-[10px] sm:text-[11px] transition-all ${
             currentView === 'map'
               ? 'bg-[#111317] text-white shadow-sm font-semibold'
               : 'text-tactical-muted hover:text-tactical-text'
           }`}
         >
           <MapIcon className="w-3 h-3" />
-          <span>LIVE MAP (US & GLOBE)</span>
+          <span className="hidden sm:inline">LIVE MAP (US & GLOBE)</span>
+          <span className="sm:hidden font-bold">MAP</span>
         </button>
         <button
           onClick={() => onToggleView('topo')}
-          className={`flex items-center gap-1.5 px-3 py-1 rounded text-[11px] transition-all ${
+          className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 rounded text-[10px] sm:text-[11px] transition-all ${
             currentView === 'topo'
               ? 'bg-tactical-orange text-white shadow-sm font-semibold'
               : 'text-tactical-muted hover:text-tactical-text'
           }`}
         >
           <Mountain className="w-3 h-3" />
-          <span>3D TOPO STRAIT</span>
+          <span className="hidden sm:inline">3D TOPO STRAIT</span>
+          <span className="sm:hidden font-bold">3D</span>
         </button>
       </div>
 
-      {/* Right: UTC Time, Latency, Search, and Alerts */}
-      <div className="flex items-center gap-4">
-        {/* UTC Clock */}
-        <div className="text-[11px] text-tactical-muted tracking-wider">
+      {/* Right: UTC Time, Latency, Live Relay, Search, and Alerts */}
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        {/* UTC Clock (Desktop only) */}
+        <div className="hidden lg:block text-[11px] text-tactical-muted tracking-wider">
           {utcTime || '14:30:07 UTC+0'}
         </div>
 
-        {/* Latency Monitor */}
-        <div className="flex items-center gap-1 text-[11px] text-tactical-dim">
+        {/* Latency Monitor (Desktop only) */}
+        <div className="hidden md:flex items-center gap-1 text-[11px] text-tactical-dim">
           <span>Latency:</span>
           <span className="font-semibold text-tactical-text">{latency}ms</span>
         </div>
@@ -134,37 +140,38 @@ export default function TopBar({
         {/* Live Cloud Relay Pill */}
         <button
           onClick={() => setShowRelayModal(true)}
-          className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold tracking-tight transition-all cursor-pointer ${
+          className={`flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded text-[10px] font-bold tracking-tight transition-all cursor-pointer ${
             feedMode === 'LIVE_RELAY'
               ? 'bg-emerald-500/15 text-emerald-800 border border-emerald-500/40 hover:bg-emerald-500/25'
               : 'bg-amber-500/15 text-amber-800 border border-amber-500/40 hover:bg-amber-500/25'
           }`}
-          title="Click to configure 24/7 Live Cloud Relay (Render / Railway / localhost)"
+          title="Configure 24/7 Live Cloud Relay (Render / Railway / localhost)"
         >
           <span className={`w-1.5 h-1.5 rounded-full ${feedMode === 'LIVE_RELAY' ? 'bg-emerald-600 animate-pulse' : 'bg-amber-600'}`} />
-          <span>{feedMode === 'LIVE_RELAY' ? 'LIVE RELAY' : 'CRON (15M)'}</span>
+          <span className="hidden sm:inline">{feedMode === 'LIVE_RELAY' ? 'LIVE RELAY' : 'CRON (15M)'}</span>
+          <span className="sm:hidden">{feedMode === 'LIVE_RELAY' ? 'LIVE' : 'CRON'}</span>
         </button>
 
         {/* Search Bar */}
         <div className="relative">
-          <div className="flex items-center bg-[#dbdee3] border border-tactical-borderDark/50 rounded px-2 py-0.5 focus-within:border-tactical-orange">
-            <Search className="w-3 h-3 text-tactical-dim mr-1.5" />
+          <div className="flex items-center bg-[#dbdee3] border border-tactical-borderDark/50 rounded px-1.5 sm:px-2 py-0.5 focus-within:border-tactical-orange">
+            <Search className="w-3 h-3 text-tactical-dim mr-1 sm:mr-1.5 shrink-0" />
             <input
               type="text"
-              placeholder={`SEARCH ${allVessels.length.toLocaleString()}...`}
+              placeholder={`SEARCH...`}
               value={searchQuery}
               onChange={(e) => {
                 onSearchChange(e.target.value);
                 setShowSearchDropdown(true);
               }}
               onFocus={() => setShowSearchDropdown(true)}
-              className="bg-transparent text-[11px] text-tactical-text outline-none placeholder:text-tactical-dim/70 w-32 focus:w-48 transition-all"
+              className="bg-transparent text-[10px] sm:text-[11px] text-tactical-text outline-none placeholder:text-tactical-dim/70 w-16 sm:w-32 focus:w-28 sm:focus:w-48 transition-all"
             />
           </div>
 
           {/* Search Results Dropdown */}
           {showSearchDropdown && filteredVessels.length > 0 && (
-            <div className="absolute right-0 top-full mt-1 w-72 bg-white border border-tactical-border shadow-xl rounded z-50 max-h-72 overflow-y-auto">
+            <div className="absolute right-0 top-full mt-1 w-64 sm:w-72 bg-white border border-tactical-border shadow-xl rounded z-50 max-h-72 overflow-y-auto">
               <div className="px-3 py-1.5 bg-[#f4f5f7] border-b border-tactical-border text-[10px] text-tactical-dim font-bold flex justify-between">
                 <span>FOUND {filteredVessels.length.toLocaleString()} VESSELS</span>
                 <span>SHOWING {Math.min(25, filteredVessels.length)}</span>
@@ -197,16 +204,16 @@ export default function TopBar({
         <div className="relative" ref={alertsDropdownRef}>
           <button
             onClick={() => setShowAlertsDropdown((prev) => !prev)}
-            className={`flex items-center px-2.5 py-1 rounded text-[11px] font-bold tracking-wider transition-all shadow-sm ${
+            className={`flex items-center px-2 py-1 rounded text-[10px] sm:text-[11px] font-bold tracking-wider transition-all shadow-sm ${
               showAlertsDropdown
                 ? 'bg-[#b91c1c] text-white ring-2 ring-red-400'
                 : 'bg-tactical-orange hover:bg-[#e03d07] text-white active:scale-95'
             }`}
             title="Toggle Live Maritime Alerts Feed"
           >
-            <Bell className="w-3.5 h-3.5 mr-1 fill-white" />
-            <span>ALERTS</span>
-            <span className="ml-1.5 bg-black/25 px-1.5 py-0.2 rounded text-[10px] font-mono">
+            <Bell className="w-3 h-3 mr-0.5 sm:mr-1 fill-white shrink-0" />
+            <span className="hidden sm:inline">ALERTS</span>
+            <span className="ml-1 bg-black/25 px-1 py-0.2 rounded text-[9px] font-mono">
               {displayAlerts.length}
             </span>
           </button>

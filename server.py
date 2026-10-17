@@ -568,11 +568,13 @@ async def websocket_handler(request):
     connected_clients.add(ws)
     logger.info("Client connected. Total clients: %d", len(connected_clients))
 
-    # Initial snapshot to client
+    # Initial snapshot to client (keep frame < 1MB so mobile Safari and proxies never drop)
     try:
+        active_sample = sorted(vessels_db.values(), key=lambda v: v.get("last_updated", 0), reverse=True)[:2500]
         await ws.send_str(json.dumps({
             "type": "SNAPSHOT",
-            "vessels": list(vessels_db.values()),
+            "vessels": active_sample,
+            "total_tracked": len(vessels_db),
             "alerts": alerts_db,
             "server_time": time.time()
         }))
