@@ -67,7 +67,27 @@ The repository includes a serverless GitHub Actions workflow ([`.github/workflow
 
 ---
 
-## 📦 How to Deploy to GitHub Pages
+## 🌐 Option 2: 24/7 Live Cloud Relay (VesselFinder-Style Real-Time Streaming)
+
+For **0-second real-time vessel movements** just like VesselFinder, deploy the included `server.py` to a free cloud service:
+
+### 1-Click Deployment on Render.com (Free)
+1. Go to [**Render Dashboard**](https://dashboard.render.com/) → **New** → **Web Service**.
+2. Connect your GitHub repository: `austinz2428/ShipFinder`.
+3. Render will automatically detect [`render.yaml`](render.yaml) and start `python server.py`.
+4. Copy your live Render URL (e.g. `https://shipfinder-relay.onrender.com`).
+5. In your web app, click the **LIVE RELAY / CRON SYNC** button in the top bar, paste your Render URL, and click **Connect Live Stream**!
+
+### Docker / Fly.io / Railway
+A production [`Dockerfile`](Dockerfile) and [`Procfile`](Procfile) are provided in the root directory. To run with Docker:
+```bash
+docker build -t shipfinder-relay .
+docker run -p 8080:8080 -e AISSTREAM_API_KEY=your_key shipfinder-relay
+```
+
+---
+
+## 📦 How to Deploy Frontend to GitHub Pages
 
 1. Go to your repository on GitHub: `Settings` → `Pages`.
 2. Under **Build and deployment** → **Source**, select **`GitHub Actions`**.

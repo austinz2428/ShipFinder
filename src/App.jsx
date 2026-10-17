@@ -15,6 +15,8 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [latency, setLatency] = useState(82);
   const [searchQuery, setSearchQuery] = useState('');
+  const [feedMode, setFeedMode] = useState('CRON_SNAPSHOT');
+  const [relayUrl, setRelayUrl] = useState(null);
 
   const [layers, setLayers] = useState({
     tracks: true,
@@ -36,6 +38,12 @@ export default function App() {
       }
       if (data.latency) {
         setLatency(data.latency);
+      }
+      if (data.feedMode) {
+        setFeedMode(data.feedMode);
+      }
+      if (data.relayUrl !== undefined) {
+        setRelayUrl(data.relayUrl);
       }
 
       // If no selected vessel yet, default to SAM LAUD
@@ -82,6 +90,8 @@ export default function App() {
         onSelectVessel={handleSelectVessel}
         alerts={alerts}
         latency={latency}
+        feedMode={feedMode}
+        relayUrl={relayUrl}
       />
 
       {/* 2. Main Fullscreen Workspace Layout */}

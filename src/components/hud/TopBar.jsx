@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Bell, Mountain, Map as MapIcon, X, AlertTriangle, AlertCircle, Info } from 'lucide-react';
+import { Search, Bell, Mountain, Map as MapIcon, X, AlertTriangle, AlertCircle, Info, Radio } from 'lucide-react';
 import { INITIAL_ALERTS } from '../../data/mockVessels';
+import CloudRelayModal from './CloudRelayModal';
 
 export default function TopBar({
   currentView = 'map', // 'map' | 'topo'
@@ -12,11 +13,14 @@ export default function TopBar({
   onSelectVessel,
   alerts = INITIAL_ALERTS,
   alertsCount,
-  latency = 82
+  latency = 82,
+  feedMode = 'CRON_SNAPSHOT',
+  relayUrl = null
 }) {
   const [utcTime, setUtcTime] = useState('');
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [showAlertsDropdown, setShowAlertsDropdown] = useState(false);
+  const [showRelayModal, setShowRelayModal] = useState(false);
   const alertsDropdownRef = useRef(null);
 
   useEffect(() => {
@@ -126,6 +130,20 @@ export default function TopBar({
           <span>Latency:</span>
           <span className="font-semibold text-tactical-text">{latency}ms</span>
         </div>
+
+        {/* Live Cloud Relay Pill */}
+        <button
+          onClick={() => setShowRelayModal(true)}
+          className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold tracking-tight transition-all cursor-pointer ${
+            feedMode === 'LIVE_RELAY'
+              ? 'bg-emerald-500/15 text-emerald-800 border border-emerald-500/40 hover:bg-emerald-500/25'
+              : 'bg-amber-500/15 text-amber-800 border border-amber-500/40 hover:bg-amber-500/25'
+          }`}
+          title="Click to configure 24/7 Live Cloud Relay (Render / Railway / localhost)"
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${feedMode === 'LIVE_RELAY' ? 'bg-emerald-600 animate-pulse' : 'bg-amber-600'}`} />
+          <span>{feedMode === 'LIVE_RELAY' ? 'LIVE RELAY' : 'CRON (15M)'}</span>
+        </button>
 
         {/* Search Bar */}
         <div className="relative">
@@ -280,6 +298,15 @@ export default function TopBar({
           )}
         </div>
       </div>
+
+      {/* Cloud Relay Configuration Modal */}
+      <CloudRelayModal
+        isOpen={showRelayModal}
+        onClose={() => setShowRelayModal(false)}
+        feedMode={feedMode}
+        latency={latency}
+        relayUrl={relayUrl}
+      />
     </header>
   );
 }
