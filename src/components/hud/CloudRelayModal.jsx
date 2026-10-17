@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Server, Wifi, WifiOff, CheckCircle2, AlertCircle, ExternalLink, Zap } from 'lucide-react';
+import { X, Server, Wifi, WifiOff, CheckCircle2, AlertCircle } from 'lucide-react';
 import { aisClient } from '../../services/aisClient';
 
 export default function CloudRelayModal({ isOpen, onClose, feedMode, latency, relayUrl }) {
@@ -174,34 +174,6 @@ export default function CloudRelayModal({ isOpen, onClose, feedMode, latency, re
                 <span>{testDetails}</span>
               </div>
             )}
-          </div>
-
-          {/* Quick Setup Instructions */}
-          <div className="bg-[#12141a] p-3 rounded border border-gray-800 text-[11px] flex flex-col gap-2">
-            <div className="font-bold text-gray-200 flex items-center gap-1">
-              <Zap className="w-3.5 h-3.5 text-tactical-orange" />
-              <span>How to deploy your free 24/7 cloud relay:</span>
-            </div>
-            <ol className="list-decimal list-inside space-y-1 text-gray-400 text-[11px]">
-              <li>
-                Go to{' '}
-                <a
-                  href="https://dashboard.render.com/select-repo?type=web"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-tactical-orange underline hover:text-orange-400 inline-flex items-center gap-0.5"
-                >
-                  dashboard.render.com <ExternalLink className="w-2.5 h-2.5" />
-                </a>{' '}
-                and connect your <strong className="text-gray-300">austinz2428/ShipFinder</strong> repo.
-              </li>
-              <li>
-                Render automatically detects <strong className="text-gray-300">server.py</strong> and builds it for free.
-              </li>
-              <li>
-                Copy your Render URL (e.g. <code className="text-tactical-orange">https://shipfinder-relay.onrender.com</code>), paste it above, and click <strong className="text-gray-200">Connect Live Stream</strong>.
-              </li>
-            </ol>
           </div>
         </div>
 
