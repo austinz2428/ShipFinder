@@ -14,7 +14,7 @@ export default function TopBar({
   alerts = INITIAL_ALERTS,
   alertsCount,
   latency = 82,
-  feedMode = 'CRON_SNAPSHOT',
+  feedMode = 'CONNECTING',
   relayUrl = null
 }) {
   const [utcTime, setUtcTime] = useState('');
@@ -140,16 +140,44 @@ export default function TopBar({
         {/* Live Cloud Relay Pill */}
         <button
           onClick={() => setShowRelayModal(true)}
-          className={`flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded text-[10px] font-bold tracking-tight transition-all cursor-pointer ${
+          className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold tracking-tight transition-all cursor-pointer ${
             feedMode === 'LIVE_RELAY'
               ? 'bg-emerald-500/15 text-emerald-800 border border-emerald-500/40 hover:bg-emerald-500/25'
-              : 'bg-amber-500/15 text-amber-800 border border-amber-500/40 hover:bg-amber-500/25'
+              : feedMode === 'CONNECTING'
+              ? 'bg-amber-500/15 text-amber-800 border border-amber-500/40 hover:bg-amber-500/25 animate-pulse'
+              : 'bg-gray-500/15 text-gray-700 border border-gray-400/40 hover:bg-gray-500/25'
           }`}
-          title="Configure 24/7 Live Cloud Relay (Render / Railway / localhost)"
+          title={
+            feedMode === 'LIVE_RELAY'
+              ? '24/7 Live WebSocket Stream Active (0s delay)'
+              : feedMode === 'CONNECTING'
+              ? 'Auto-connecting to live AIS stream...'
+              : 'Static snapshot mode (Click to connect live stream)'
+          }
         >
-          <span className={`w-1.5 h-1.5 rounded-full ${feedMode === 'LIVE_RELAY' ? 'bg-emerald-600 animate-pulse' : 'bg-amber-600'}`} />
-          <span className="hidden sm:inline">{feedMode === 'LIVE_RELAY' ? 'LIVE RELAY' : 'CRON (15M)'}</span>
-          <span className="sm:hidden">{feedMode === 'LIVE_RELAY' ? 'LIVE' : 'CRON'}</span>
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              feedMode === 'LIVE_RELAY'
+                ? 'bg-emerald-600 animate-pulse'
+                : feedMode === 'CONNECTING'
+                ? 'bg-amber-500 animate-ping'
+                : 'bg-gray-400'
+            }`}
+          />
+          <span className="hidden sm:inline">
+            {feedMode === 'LIVE_RELAY'
+              ? 'LIVE RELAY'
+              : feedMode === 'CONNECTING'
+              ? 'CONNECTING LIVE...'
+              : 'CRON (15M)'}
+          </span>
+          <span className="sm:hidden">
+            {feedMode === 'LIVE_RELAY'
+              ? 'LIVE'
+              : feedMode === 'CONNECTING'
+              ? 'CONNECTING'
+              : 'CRON'}
+          </span>
         </button>
 
         {/* Search Bar */}

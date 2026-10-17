@@ -18,6 +18,7 @@ export default function CloudRelayModal({ isOpen, onClose, feedMode, latency, re
   if (!isOpen) return null;
 
   const isLive = feedMode === 'LIVE_RELAY';
+  const isConnecting = feedMode === 'CONNECTING';
 
   const handleTestConnection = async () => {
     if (!urlInput.trim()) {
@@ -97,30 +98,44 @@ export default function CloudRelayModal({ isOpen, onClose, feedMode, latency, re
           <div className={`p-3 rounded border flex items-center justify-between ${
             isLive
               ? 'bg-green-950/40 border-green-500/40 text-green-300'
-              : 'bg-amber-950/30 border-amber-500/30 text-amber-300'
+              : isConnecting
+              ? 'bg-amber-950/40 border-amber-500/40 text-amber-300'
+              : 'bg-gray-800/40 border-gray-600/40 text-gray-300'
           }`}>
             <div className="flex items-center gap-2.5">
               {isLive ? (
                 <Wifi className="w-4 h-4 text-green-400 animate-pulse" />
+              ) : isConnecting ? (
+                <Wifi className="w-4 h-4 text-amber-400 animate-ping" />
               ) : (
-                <WifiOff className="w-4 h-4 text-amber-400" />
+                <WifiOff className="w-4 h-4 text-gray-400" />
               )}
               <div>
                 <div className="font-bold text-xs">
-                  {isLive ? '🟢 LIVE WEBSOCKET STREAM ACTIVE' : '🟡 STATIC BATCH (15M CRON FEED)'}
+                  {isLive
+                    ? '🟢 LIVE WEBSOCKET STREAM ACTIVE'
+                    : isConnecting
+                    ? '🟡 AUTO-CONNECTING TO LIVE STREAM...'
+                    : '⚪ STATIC BATCH (15M CRON FEED)'}
                 </div>
                 <div className="text-[10px] opacity-80 mt-0.5">
                   {isLive
                     ? `Connected to ${relayUrl || 'cloud relay'} · Latency: ${latency}ms`
+                    : isConnecting
+                    ? `Connecting to ${relayUrl || 'https://shipfinder-relay.onrender.com'}. Auto-handshake in progress...`
                     : 'Serving GitHub Actions periodic static snapshots'}
                 </div>
               </div>
             </div>
-            {isLive && (
+            {isLive ? (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-500/20 text-green-300">
                 0s DELAY
               </span>
-            )}
+            ) : isConnecting ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 animate-pulse">
+                AUTO-CONNECTING
+              </span>
+            ) : null}
           </div>
 
           {/* Configuration Input */}
@@ -214,7 +229,7 @@ export default function CloudRelayModal({ isOpen, onClose, feedMode, latency, re
               onClick={handleApply}
               className="px-4 py-1.5 rounded text-[11px] font-bold text-white bg-tactical-orange hover:bg-[#e03d07] shadow-sm transition-all cursor-pointer"
             >
-              {isLive ? 'Save & Reconnect' : 'Connect Live Stream'}
+              {isLive ? 'Save & Reconnect' : isConnecting ? 'Connecting Live...' : 'Connect Live Stream'}
             </button>
           </div>
         </div>

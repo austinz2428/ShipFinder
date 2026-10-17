@@ -15,7 +15,7 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
   const [latency, setLatency] = useState(82);
   const [searchQuery, setSearchQuery] = useState('');
-  const [feedMode, setFeedMode] = useState('CRON_SNAPSHOT');
+  const [feedMode, setFeedMode] = useState('CONNECTING');
   const [relayUrl, setRelayUrl] = useState(null);
 
   const [layers, setLayers] = useState({
