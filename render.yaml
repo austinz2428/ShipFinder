@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: shipfinder-relay
+    env: python
+    region: ohio
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    envVars:
+      - key: AISSTREAM_API_KEY
+        value: 484c88f1a086340afa5fb60ee9e90163176b739c
+      - key: PYTHONUNBUFFERED
+        value: "1"
