@@ -480,6 +480,14 @@ export default function GlobalMapView({
     renderCanvas();
   }, [vessels, selectedVessel, renderCanvas]);
 
+  // Continuously refresh canvas every 1s so the above-marker speech bubble ("Location: Just now (X seconds ago)") and moving chevrons update live
+  useEffect(() => {
+    const timer = setInterval(() => {
+      renderCanvas();
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [renderCanvas]);
+
   // Handle Tile Style changes
   useEffect(() => {
     if (!mapInstanceRef.current || !tileLayerRef.current) return;
