@@ -60,10 +60,13 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const handleSelectVessel = (vessel) => {
+  const handleSelectVessel = (vessel, openDrawer = false) => {
     setSelectedVessel(vessel);
-    setShowDrawer(true);
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    if (!isMobile || openDrawer) {
+      setShowDrawer(true);
+    }
+    if (isMobile) {
       setSidebarCollapsed(true);
     }
   };
@@ -90,7 +93,7 @@ export default function App() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         allVessels={vessels}
-        onSelectVessel={handleSelectVessel}
+        onSelectVessel={(v) => handleSelectVessel(v, true)}
         alerts={alerts}
         latency={latency}
         feedMode={feedMode}
@@ -103,7 +106,7 @@ export default function App() {
         <LiveFleetSidebar
           vessels={vessels}
           selectedVessel={selectedVessel}
-          onSelectVessel={handleSelectVessel}
+          onSelectVessel={(v) => handleSelectVessel(v, true)}
           isCollapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
@@ -122,8 +125,9 @@ export default function App() {
             <GlobalMapView
               vessels={vessels}
               selectedVessel={selectedVessel}
-              onSelectVessel={handleSelectVessel}
+              onSelectVessel={(v) => handleSelectVessel(v, false)}
               onSwitchToTopographical={handleSwitchToTopographical}
+              onOpenDrawer={() => setShowDrawer(true)}
               layers={layers}
             />
           ) : (
