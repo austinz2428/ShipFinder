@@ -9,7 +9,7 @@ export default function CloudRelayModal({ isOpen, onClose, feedMode, latency, re
 
   useEffect(() => {
     if (isOpen) {
-      setUrlInput(relayUrl || window.localStorage.getItem('shipfinder_relay_url') || '');
+      setUrlInput(relayUrl || window.localStorage.getItem('shipfinder_relay_url') || 'https://shipfinder-relay.onrender.com');
       setTestState(null);
       setTestDetails('');
     }

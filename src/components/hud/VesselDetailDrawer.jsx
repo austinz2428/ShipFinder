@@ -71,8 +71,13 @@ export default function VesselDetailDrawer({
       onWheel={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
-      className="absolute inset-y-0 right-0 w-[420px] max-w-[95vw] bg-[#f8f9fa] border-l border-tactical-border shadow-2xl flex flex-col font-mono text-xs z-50 overflow-hidden select-none"
+      className="fixed sm:absolute inset-x-0 bottom-0 top-auto sm:inset-y-0 sm:right-0 sm:left-auto w-full sm:w-[420px] max-h-[75vh] sm:max-h-full sm:max-w-[95vw] bg-[#f8f9fa] border-t sm:border-t-0 sm:border-l border-tactical-border rounded-t-2xl sm:rounded-none shadow-2xl flex flex-col font-mono text-xs z-50 overflow-hidden select-none"
     >
+      {/* Mobile Top Drag Handle */}
+      <div className="sm:hidden w-full flex justify-center pt-2 pb-0.5 bg-white cursor-pointer" onClick={onClose}>
+        <div className="w-10 h-1 bg-gray-300 rounded-full" />
+      </div>
+
       {/* 1. TOP HEADER (Fixed at top) */}
       <div className="p-3 border-b border-tactical-border flex items-center justify-between bg-white shrink-0">
         <div className="flex items-center gap-2">

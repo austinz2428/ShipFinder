@@ -78,7 +78,7 @@ export default function LiveFleetSidebar({
 
   if (isCollapsed) {
     return (
-      <div className="h-full bg-[#f4f5f7]/95 border-r border-tactical-border flex flex-col items-center py-3 z-30 select-none">
+      <div className="hidden sm:flex h-full bg-[#f4f5f7]/95 border-r border-tactical-border flex-col items-center py-3 z-30 select-none">
         <button
           onClick={onToggleCollapse}
           className="p-1.5 rounded hover:bg-gray-200 text-tactical-muted hover:text-tactical-text transition-colors"
@@ -95,7 +95,7 @@ export default function LiveFleetSidebar({
   }
 
   return (
-    <aside className="w-72 h-full bg-[#f4f5f7]/95 backdrop-blur-md border-r border-tactical-border flex flex-col justify-between font-mono text-xs select-none z-30 shadow-sm">
+    <aside className="fixed sm:relative inset-y-0 left-0 w-80 max-w-[85vw] sm:w-72 h-full bg-[#f4f5f7]/98 backdrop-blur-md border-r border-tactical-border flex flex-col justify-between font-mono text-xs select-none z-40 shadow-2xl sm:shadow-sm">
       {/* Top Header */}
       <div className="p-3 border-b border-tactical-border flex flex-col gap-2.5 bg-white/60">
         <div className="flex items-center justify-between">

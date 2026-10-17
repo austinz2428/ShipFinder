@@ -245,6 +245,48 @@ export default function TopographicalView({
     window.addEventListener('mouseup', onMouseUp);
     container.addEventListener('wheel', onWheel, { passive: false });
 
+    // iPhone & Mobile Touch Controls (Single-finger orbit, Two-finger pinch zoom)
+    let prevTouch = null;
+    let prevPinchDist = null;
+
+    const onTouchStart = (e) => {
+      if (e.touches.length === 1) {
+        prevTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        prevPinchDist = Math.hypot(dx, dy);
+      }
+    };
+
+    const onTouchMove = (e) => {
+      if (e.touches.length === 1 && prevTouch) {
+        const dx = e.touches[0].clientX - prevTouch.x;
+        const dy = e.touches[0].clientY - prevTouch.y;
+        cameraSpherical.theta += dx * 0.008;
+        cameraSpherical.phi -= dy * 0.008;
+        cameraSpherical.phi = Math.max(0.25, Math.min(Math.PI / 2.05, cameraSpherical.phi));
+        prevTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else if (e.touches.length === 2 && prevPinchDist) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        const factor = (prevPinchDist - dist) * 0.15;
+        cameraSpherical.radius += factor;
+        cameraSpherical.radius = Math.max(20, Math.min(130, cameraSpherical.radius));
+        prevPinchDist = dist;
+      }
+    };
+
+    const onTouchEnd = () => {
+      prevTouch = null;
+      prevPinchDist = null;
+    };
+
+    container.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+
     // Animation & Render Loop
     let animId;
     let clock = new THREE.Clock();
@@ -327,6 +369,9 @@ export default function TopographicalView({
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
       container.removeEventListener('wheel', onWheel);
+      container.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
       window.removeEventListener('resize', handleResize);
       if (renderer.domElement && renderer.domElement.parentNode) {
         renderer.domElement.parentNode.removeChild(renderer.domElement);
@@ -422,20 +467,21 @@ export default function TopographicalView({
       </div>
 
       {/* Top Right: Return to Live Map & Sector Indicator & Toggle Dossier */}
-      <div className="absolute top-4 right-6 flex items-center gap-2 z-20">
+      <div className="absolute top-3 right-3 sm:top-4 sm:right-6 flex items-center gap-1.5 sm:gap-2 z-20">
         <button
           onClick={onReturnToGlobe}
-          className="flex items-center gap-2 bg-white/95 hover:bg-[#ff4d15] hover:text-white text-tactical-text border border-tactical-border px-3 py-1.5 rounded shadow-sm text-xs font-medium font-mono transition-all active:scale-95"
+          className="flex items-center gap-1.5 bg-white/95 hover:bg-[#ff4d15] hover:text-white text-tactical-text border border-tactical-border px-2.5 sm:px-3 py-1.5 rounded shadow-sm text-xs font-medium font-mono transition-all active:scale-95"
           title="Return to Live Map"
         >
           <MapIcon className="w-3.5 h-3.5" />
-          <span>RETURN TO LIVE MAP</span>
+          <span className="hidden sm:inline">RETURN TO LIVE MAP</span>
+          <span className="sm:hidden font-bold">MAP</span>
         </button>
 
         {onToggleDrawer && (
           <button
             onClick={onToggleDrawer}
-            className={`flex items-center gap-1.5 border px-2.5 py-1.5 rounded shadow-sm text-xs font-medium font-mono transition-all ${
+            className={`flex items-center gap-1.5 border px-2 sm:px-2.5 py-1.5 rounded shadow-sm text-xs font-medium font-mono transition-all ${
               showDrawer
                 ? 'bg-tactical-orange text-white border-tactical-orange'
                 : 'bg-white/95 hover:bg-gray-100 text-tactical-text border-tactical-border'
@@ -443,16 +489,17 @@ export default function TopographicalView({
             title="Toggle Vessel AIS Dossier"
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>DOSSIER // SPECS</span>
+            <span className="hidden sm:inline">DOSSIER // SPECS</span>
+            <span className="sm:hidden font-bold">SPECS</span>
           </button>
         )}
 
-        <div className={`border rounded px-2.5 py-1.5 flex items-center gap-2 text-xs font-mono font-medium shadow-sm ${catMeta.badgeClass}`}>
+        <div className={`hidden md:flex border rounded px-2.5 py-1.5 items-center gap-2 text-xs font-mono font-medium shadow-sm ${catMeta.badgeClass}`}>
           <div className={`w-2 h-2 rounded-full ${catMeta.dotColor}`} />
           <span>CLASS: {catMeta.shortLabel}</span>
         </div>
 
-        <div className="bg-white/95 border border-tactical-border rounded px-2.5 py-1.5 flex items-center gap-2 text-xs font-mono text-tactical-muted shadow-sm">
+        <div className="hidden lg:flex bg-white/95 border border-tactical-border rounded px-2.5 py-1.5 items-center gap-2 text-xs font-mono text-tactical-muted shadow-sm">
           <Eye className="w-3.5 h-3.5 text-tactical-orange" />
           <span>3D TOPO FAIRWAY</span>
         </div>

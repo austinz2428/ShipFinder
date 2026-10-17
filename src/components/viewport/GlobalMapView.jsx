@@ -387,8 +387,8 @@ export default function GlobalMapView({
           ))}
         </div>
 
-        {/* Strategic Region Pills */}
-        <div className="flex items-center gap-1.5 flex-wrap max-w-xl">
+        {/* Strategic Region Pills (Desktop) */}
+        <div className="hidden sm:flex items-center gap-1.5 flex-wrap max-w-xl">
           {CHOKEPOINTS.slice(0, 5).map(cp => (
             <button
               key={cp.id}
@@ -401,8 +401,8 @@ export default function GlobalMapView({
         </div>
       </div>
 
-      {/* Top Right: Ship Type Legend & Filter Bar */}
-      <div className="absolute top-3 right-3 z-20 bg-white/95 backdrop-blur-md p-2 rounded-md border border-tactical-border shadow-md flex items-center gap-3 text-[10px] font-mono">
+      {/* Top Right: Ship Type Legend & Filter Bar (Desktop) */}
+      <div className="hidden md:flex absolute top-3 right-3 z-20 bg-white/95 backdrop-blur-md p-2 rounded-md border border-tactical-border shadow-md items-center gap-3 text-[10px] font-mono">
         <span className="text-tactical-dim font-bold uppercase">FLEET:</span>
         <button
           onClick={() => setFilterType(filterType === 'CARGO' ? 'ALL' : 'CARGO')}
@@ -474,28 +474,28 @@ export default function GlobalMapView({
 
       {/* Bottom Target Card (When Vessel Selected) */}
       {selectedVessel && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 bg-white/95 backdrop-blur-md border border-tactical-orange text-tactical-text px-5 py-2.5 rounded-lg shadow-xl flex items-center gap-5">
-          <div className="flex items-center gap-3">
+        <div className="absolute bottom-2 sm:bottom-4 left-2 right-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-20 bg-white/95 backdrop-blur-md border border-tactical-orange text-tactical-text p-2.5 sm:px-5 sm:py-2.5 rounded-lg shadow-xl flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-5 max-w-[calc(100vw-1rem)]">
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
             <div
-              className="w-8 h-8 rounded flex items-center justify-center font-bold text-xs"
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded flex items-center justify-center font-bold text-xs shrink-0"
               style={{ backgroundColor: `${getShipColor(selectedVessel.type)}20`, color: getShipColor(selectedVessel.type) }}
             >
               ▲
             </div>
-            <div className="flex flex-col">
-              <span className="text-[9px] text-tactical-dim font-bold uppercase tracking-wider">TARGET ACQUIRED</span>
-              <span className="text-sm font-bold text-tactical-text">{selectedVessel.name}</span>
-              <span className="text-[10px] text-tactical-muted">{selectedVessel.type} · {selectedVessel.sog} KN · HDG {selectedVessel.heading}°T</span>
+            <div className="flex flex-col truncate">
+              <span className="text-[8px] sm:text-[9px] text-tactical-dim font-bold uppercase tracking-wider">TARGET ACQUIRED</span>
+              <span className="text-xs sm:text-sm font-bold text-tactical-text truncate">{selectedVessel.name}</span>
+              <span className="text-[9px] sm:text-[10px] text-tactical-muted truncate">{selectedVessel.type} · {selectedVessel.sog} KN · HDG {selectedVessel.heading}°T</span>
             </div>
           </div>
 
-          <div className="h-7 w-px bg-tactical-border" />
+          <div className="hidden sm:block h-7 w-px bg-tactical-border shrink-0" />
 
           <button
             onClick={onSwitchToTopographical}
-            className="flex items-center gap-2 bg-tactical-orange hover:bg-[#e03d07] text-white px-4 py-2 rounded font-semibold text-xs font-mono tracking-wider uppercase transition-all shadow-md shadow-tactical-orange/20 active:scale-95"
+            className="w-full sm:w-auto flex items-center justify-center gap-1.5 bg-tactical-orange hover:bg-[#e03d07] text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded font-semibold text-[11px] sm:text-xs font-mono tracking-wider uppercase transition-all shadow-md active:scale-95 shrink-0"
           >
-            <span>ENTER 3D TOPOGRAPHICAL VIEW</span>
+            <span>ENTER 3D VIEW</span>
             <span>➔</span>
           </button>
         </div>

@@ -1,5 +1,7 @@
 import { INITIAL_VESSELS, INITIAL_ALERTS } from '../data/mockVessels';
 
+const DEFAULT_RELAY_URL = 'https://shipfinder-relay.onrender.com';
+
 class AISClientService {
   constructor() {
     this.vessels = new Map();
@@ -25,7 +27,10 @@ class AISClientService {
   }
 
   getSavedRelayUrl() {
-    if (typeof window === 'undefined') return null;
+    if (typeof window === 'undefined') return DEFAULT_RELAY_URL;
+    if (window.localStorage.getItem('shipfinder_relay_disabled') === 'true') {
+      return null;
+    }
     const stored = window.localStorage.getItem('shipfinder_relay_url');
     if (stored) return stored.trim();
     if (import.meta.env?.VITE_AIS_RELAY_URL) {
@@ -34,13 +39,15 @@ class AISClientService {
     if (this.isLocalHost()) {
       return `http://${window.location.hostname || 'localhost'}:8080`;
     }
-    return null;
+    // Built-in Render URL: 100% automatic connection with zero copy-pasting!
+    return DEFAULT_RELAY_URL;
   }
 
   saveRelayUrl(url) {
     if (typeof window === 'undefined') return;
     if (url) {
       window.localStorage.setItem('shipfinder_relay_url', url.trim());
+      window.localStorage.removeItem('shipfinder_relay_disabled');
       this.relayUrl = url.trim();
     } else {
       window.localStorage.removeItem('shipfinder_relay_url');
@@ -297,6 +304,9 @@ class AISClientService {
   }
 
   disconnectCloudRelay() {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('shipfinder_relay_disabled', 'true');
+    }
     this.saveRelayUrl(null);
     if (this.ws) {
       try { this.ws.close(); } catch (e) {}
