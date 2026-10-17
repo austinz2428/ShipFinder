@@ -16,7 +16,11 @@ class AISClientService {
     this.hasPendingUpdates = false;
     this.batchTimer = null;
     this.ws = null;
-    this.feedMode = 'CRON_SNAPSHOT'; // 'LIVE_RELAY' | 'CRON_SNAPSHOT'
+    this.feedMode = 'CONNECTING'; // 'LIVE_RELAY' | 'CONNECTING' | 'CRON_SNAPSHOT'
+    this.reconnectTimer = null;
+    this.reconnectAttempts = 0;
+    this.autoReconnect = true;
+    this.windowListenersAttached = false;
     this.relayUrl = this.getSavedRelayUrl();
     this.pingStartTime = 0;
 
@@ -28,9 +32,6 @@ class AISClientService {
 
   getSavedRelayUrl() {
     if (typeof window === 'undefined') return DEFAULT_RELAY_URL;
-    if (window.localStorage.getItem('shipfinder_relay_disabled') === 'true') {
-      return null;
-    }
     const stored = window.localStorage.getItem('shipfinder_relay_url');
     if (stored) return stored.trim();
     if (import.meta.env?.VITE_AIS_RELAY_URL) {
@@ -47,11 +48,10 @@ class AISClientService {
     if (typeof window === 'undefined') return;
     if (url) {
       window.localStorage.setItem('shipfinder_relay_url', url.trim());
-      window.localStorage.removeItem('shipfinder_relay_disabled');
       this.relayUrl = url.trim();
     } else {
       window.localStorage.removeItem('shipfinder_relay_url');
-      this.relayUrl = null;
+      this.relayUrl = DEFAULT_RELAY_URL;
     }
   }
 
@@ -108,13 +108,23 @@ class AISClientService {
     // 2. Start dead-reckoning engine to smoothly advance moving ships
     this.startLiveSimulation();
 
-    // 3. Connect to live cloud relay if configured or localhost
-    if (this.relayUrl || this.isLocalHost()) {
-      this.connectCloudRelay(this.relayUrl);
-    } else {
-      // Otherwise poll static vessels.json periodically
-      this.startCronPolling();
+    // 3. Attach auto-resume listeners for network reconnection & tab focus
+    if (typeof window !== 'undefined' && !this.windowListenersAttached) {
+      this.windowListenersAttached = true;
+      window.addEventListener('online', () => {
+        if (this.autoReconnect && (!this.ws || this.ws.readyState !== WebSocket.OPEN)) {
+          this.connectCloudRelay(this.relayUrl || DEFAULT_RELAY_URL);
+        }
+      });
+      window.addEventListener('focus', () => {
+        if (this.autoReconnect && (!this.ws || this.ws.readyState !== WebSocket.OPEN)) {
+          this.connectCloudRelay(this.relayUrl || DEFAULT_RELAY_URL);
+        }
+      });
     }
+
+    // 4. Automatically connect to live cloud relay (Render / Railway / localhost)
+    this.connectCloudRelay(this.relayUrl || DEFAULT_RELAY_URL);
   }
 
   startCronPolling() {
@@ -200,13 +210,24 @@ class AISClientService {
     } catch (e) {}
   }
 
+  wakeUpRelay(targetUrl) {
+    if (!targetUrl || typeof window === 'undefined') return;
+    try {
+      let httpUrl = targetUrl.replace(/^wss?:\/\//i, (m) => m.toLowerCase().startsWith('wss') ? 'https://' : 'http://').replace(/\/ws\/?$/i, '');
+      fetch(`${httpUrl}/health`, { mode: 'cors' }).catch(() => {});
+    } catch (e) {}
+  }
+
   connectCloudRelay(targetUrl) {
     if (!targetUrl && this.isLocalHost()) {
       targetUrl = `http://${window.location.hostname || 'localhost'}:8080`;
     }
-    if (!targetUrl) return;
+    if (!targetUrl) {
+      targetUrl = DEFAULT_RELAY_URL;
+    }
 
     this.saveRelayUrl(targetUrl);
+    this.autoReconnect = true;
 
     // Normalize URL to wss:// or ws://
     let wsUrl = targetUrl.trim();
@@ -221,13 +242,31 @@ class AISClientService {
       wsUrl = wsUrl.replace(/\/+$/, '') + '/ws';
     }
 
-    // Close any previous socket
+    // Cancel any pending reconnect timer
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    // Close any previous socket cleanly without triggering its onclose reconnect loop
     if (this.ws) {
-      try { this.ws.close(); } catch (e) {}
+      try {
+        this.ws.onclose = null;
+        this.ws.onerror = null;
+        this.ws.close();
+      } catch (e) {}
       this.ws = null;
     }
 
-    console.log('[AISClient] Connecting to live cloud relay WebSocket:', wsUrl);
+    // Indicate that we are connecting live
+    this.feedMode = 'CONNECTING';
+    this.hasPendingUpdates = true;
+    this.scheduleBatchNotify();
+
+    // Trigger HTTP health ping to wake up free-tier instance if sleeping
+    this.wakeUpRelay(targetUrl);
+
+    console.log('[AISClient] Auto-connecting to live cloud relay WebSocket:', wsUrl);
 
     try {
       const ws = new WebSocket(wsUrl);
@@ -237,6 +276,11 @@ class AISClientService {
         console.log('[AISClient] 🟢 Connected to Cloud Relay:', wsUrl);
         this.connected = true;
         this.feedMode = 'LIVE_RELAY';
+        this.reconnectAttempts = 0;
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
         this.hasPendingUpdates = true;
         this.scheduleBatchNotify();
 
@@ -312,12 +356,32 @@ class AISClientService {
       };
 
       ws.onclose = () => {
-        console.log('[AISClient] WebSocket closed. Reverting to static cron feed.');
         if (this.pingInterval) clearInterval(this.pingInterval);
-        this.feedMode = 'CRON_SNAPSHOT';
-        this.startCronPolling();
-        this.hasPendingUpdates = true;
-        this.scheduleBatchNotify();
+
+        if (this.autoReconnect) {
+          this.reconnectAttempts = (this.reconnectAttempts || 0) + 1;
+          const delay = Math.min(3000 * Math.pow(1.15, this.reconnectAttempts - 1), 6000);
+          console.log(`[AISClient] Cloud Relay disconnected. Auto-reconnecting in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempts})...`);
+          this.feedMode = 'CONNECTING';
+          this.hasPendingUpdates = true;
+          this.scheduleBatchNotify();
+
+          // Ensure static cron polling keeps fleet loaded as fallback
+          this.startCronPolling();
+
+          if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = setTimeout(() => {
+            if (this.autoReconnect) {
+              this.connectCloudRelay(this.relayUrl || DEFAULT_RELAY_URL);
+            }
+          }, delay);
+        } else {
+          console.log('[AISClient] Cloud Relay disconnected by user.');
+          this.feedMode = 'CRON_SNAPSHOT';
+          this.startCronPolling();
+          this.hasPendingUpdates = true;
+          this.scheduleBatchNotify();
+        }
       };
 
       ws.onerror = (err) => {
@@ -325,18 +389,34 @@ class AISClientService {
       };
     } catch (e) {
       console.warn('[AISClient] WebSocket initiation error:', e);
-      this.feedMode = 'CRON_SNAPSHOT';
-      this.startCronPolling();
+      if (this.autoReconnect) {
+        this.feedMode = 'CONNECTING';
+        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = setTimeout(() => {
+          if (this.autoReconnect) {
+            this.connectCloudRelay(this.relayUrl || DEFAULT_RELAY_URL);
+          }
+        }, 3000);
+      } else {
+        this.feedMode = 'CRON_SNAPSHOT';
+        this.startCronPolling();
+      }
+      this.hasPendingUpdates = true;
+      this.scheduleBatchNotify();
     }
   }
 
   disconnectCloudRelay() {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('shipfinder_relay_disabled', 'true');
+    this.autoReconnect = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
-    this.saveRelayUrl(null);
     if (this.ws) {
-      try { this.ws.close(); } catch (e) {}
+      try {
+        this.ws.onclose = null;
+        this.ws.close();
+      } catch (e) {}
       this.ws = null;
     }
     this.feedMode = 'CRON_SNAPSHOT';
