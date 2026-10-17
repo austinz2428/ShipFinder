@@ -138,7 +138,8 @@ export default function GlobalMapView({
   onSelectVessel,
   onSwitchToTopographical,
   onOpenDrawer,
-  layers = { tracks: true, anchorage: true }
+  layers = { tracks: true, anchorage: true },
+  alerts = []
 }) {
   const mapContainerRef = useRef(null);
   const canvasRef = useRef(null);
@@ -149,10 +150,12 @@ export default function GlobalMapView({
   const vesselsRef = useRef(vessels);
   const selectedVesselRef = useRef(selectedVessel);
   const onSelectVesselRef = useRef(onSelectVessel);
+  const alertsRef = useRef(alerts);
 
   useEffect(() => { vesselsRef.current = vessels; }, [vessels]);
   useEffect(() => { selectedVesselRef.current = selectedVessel; }, [selectedVessel]);
   useEffect(() => { onSelectVesselRef.current = onSelectVessel; }, [onSelectVessel]);
+  useEffect(() => { alertsRef.current = alerts; }, [alerts]);
 
   const [mapStyleKey, setMapStyleKey] = useState('nautical');
   const [hoveredVessel, setHoveredVessel] = useState(null);
@@ -270,11 +273,25 @@ export default function GlobalMapView({
         ctx.lineTo(point.x + boxSize, point.y + boxSize - 6);
         ctx.stroke();
 
+        // Check if this vessel has an active maritime alert
+        const activeAlert = (alertsRef.current || []).find(
+          (a) => a.mmsi === v.mmsi || (a.mmsi && String(a.mmsi) === String(v.mmsi)) || a.vessel === v.name
+        );
+
         // Speech Bubble Callout directly ABOVE the vessel marker
         const pingMsg = formatLocationPingMessage(v);
         const nameText = v.name || 'VESSEL';
-        const line1 = `${pingMsg.dot} ${pingMsg.title}`;
-        const line2 = `${nameText} · ${pingMsg.subtitle}`;
+        let line1 = `${pingMsg.dot} ${pingMsg.title}`;
+        let line2 = `${nameText} · ${pingMsg.subtitle}`;
+        let borderColor = pingMsg.isRecent ? '#10b981' : '#f59e0b';
+        let line1Color = pingMsg.isRecent ? '#34d399' : '#fbbf24';
+
+        if (activeAlert) {
+          line1 = `🚨 ${activeAlert.level} · ${activeAlert.title}`;
+          line2 = `${nameText} · ${activeAlert.details}`;
+          borderColor = activeAlert.level === 'CRIT' ? '#ef4444' : '#f59e0b';
+          line1Color = activeAlert.level === 'CRIT' ? '#f87171' : '#fbbf24';
+        }
 
         ctx.font = 'bold 11px JetBrains Mono, monospace';
         const w1 = ctx.measureText(line1).width;
@@ -337,16 +354,16 @@ export default function GlobalMapView({
         ctx.restore();
 
         // Border around callout
-        ctx.strokeStyle = pingMsg.isRecent ? '#10b981' : '#f59e0b';
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = activeAlert ? 2.0 : 1.5;
         ctx.stroke();
 
-        // Text Line 1: e.g. "🟢 Location: Just now (14s ago)"
-        ctx.fillStyle = pingMsg.isRecent ? '#34d399' : '#fbbf24';
+        // Text Line 1:
+        ctx.fillStyle = line1Color;
         ctx.font = 'bold 11px JetBrains Mono, monospace';
         ctx.fillText(line1, boxX + padX, boxY + 16);
 
-        // Text Line 2: e.g. "SAM LAUD · Moving at 12.4 KN"
+        // Text Line 2:
         ctx.fillStyle = '#f8fafc';
         ctx.font = '10px JetBrains Mono, monospace';
         ctx.fillText(line2, boxX + padX, boxY + 31);
@@ -473,16 +490,18 @@ export default function GlobalMapView({
     }).addTo(mapInstanceRef.current);
   }, [mapStyleKey]);
 
-  // Center on selected vessel when changed externally
+  // Center and zoom to selected vessel smoothly
   useEffect(() => {
     if (selectedVessel && mapInstanceRef.current) {
-      const currentCenter = mapInstanceRef.current.getCenter();
-      const dist = Math.hypot(currentCenter.lat - selectedVessel.lat, currentCenter.lng - selectedVessel.lon);
-      if (dist > 8.0) {
-        mapInstanceRef.current.panTo([selectedVessel.lat, selectedVessel.lon], { animate: true, duration: 0.8 });
-      }
+      const map = mapInstanceRef.current;
+      const currentZoom = map.getZoom();
+      const targetZoom = Math.max(currentZoom, 11);
+      map.flyTo([selectedVessel.lat, selectedVessel.lon], targetZoom, {
+        duration: 1.0,
+        easeLinearity: 0.25
+      });
     }
-  }, [selectedVessel]);
+  }, [selectedVessel?.mmsi, selectedVessel?._focusTs]);
 
   // Jump to Pre-defined Strategic Maritime Corridors
   const handleJumpToSector = (sector) => {

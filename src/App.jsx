@@ -61,7 +61,14 @@ export default function App() {
   }, []);
 
   const handleSelectVessel = (vessel, openDrawer = false) => {
-    setSelectedVessel(vessel);
+    if (currentView !== 'map') {
+      setCurrentView('map');
+    }
+    // Tag with focus timestamp so map flyTo re-triggers even for the same vessel
+    setSelectedVessel(prev => ({
+      ...vessel,
+      _focusTs: Date.now()
+    }));
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
     if (!isMobile || openDrawer) {
       setShowDrawer(true);
@@ -129,6 +136,7 @@ export default function App() {
               onSwitchToTopographical={handleSwitchToTopographical}
               onOpenDrawer={() => setShowDrawer(true)}
               layers={layers}
+              alerts={alerts}
             />
           ) : (
             <TopographicalView
@@ -159,6 +167,7 @@ export default function App() {
               onClose={() => setShowDrawer(false)}
               onSwitchToTopographical={handleSwitchToTopographical}
               onCenterMap={handleSelectVessel}
+              alerts={alerts}
             />
           )}
         </main>
