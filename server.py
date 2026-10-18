@@ -966,12 +966,17 @@ def create_app():
     return app
 
 async def main():
+    port = int(os.environ.get("PORT", "10000" if os.environ.get("RENDER") else "8080"))
+    host = os.environ.get("HOST", "0.0.0.0")
+    print(f"[BOOT] Binding ShipFinder Cloud Relay to {host}:{port}...", flush=True)
+
     app = create_app()
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, HOST, PORT)
+    site = web.TCPSite(runner, host, port)
     await site.start()
-    logger.info("ShipFinder Tactical Cloud Relay running on http://%s:%d (Fleet size: %d)", HOST, PORT, len(vessels_db))
+    print(f"[BOOT] SUCCESS: Server actively listening on http://{host}:{port} (Ready for Render port scan)", flush=True)
+    logger.info("ShipFinder Tactical Cloud Relay running on http://%s:%d (Fleet size: %d)", host, port, len(vessels_db))
 
     await asyncio.gather(
         aisstream_consumer(),
