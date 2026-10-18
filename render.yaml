@@ -1,7 +1,7 @@
 services:
   - type: web
     name: shipfinder-relay
-    env: python
+    runtime: python
     region: ohio
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -11,3 +11,5 @@ services:
         value: 484c88f1a086340afa5fb60ee9e90163176b739c
       - key: PYTHONUNBUFFERED
         value: "1"
+      - key: PORT
+        value: "10000"
