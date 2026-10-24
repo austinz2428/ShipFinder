@@ -577,19 +577,23 @@ async def batch_broadcast_worker():
         if update_batch and connected_clients:
             batch_list = list(update_batch.values())
             update_batch.clear()
-            msg_str = json.dumps({
-                "type": "VESSEL_BATCH",
-                "count": len(batch_list),
-                "vessels": batch_list
-            })
-            stale = []
-            for client in list(connected_clients):
-                try:
-                    await client.send_str(msg_str)
-                except Exception:
-                    stale.append(client)
-            for c in stale:
-                connected_clients.discard(c)
+            chunk_size = 200
+            for i in range(0, len(batch_list), chunk_size):
+                chunk = batch_list[i:i + chunk_size]
+                msg_str = json.dumps({
+                    "type": "VESSEL_BATCH",
+                    "count": len(chunk),
+                    "vessels": chunk
+                })
+                stale = []
+                for client in list(connected_clients):
+                    try:
+                        if not client.closed:
+                            await client.send_str(msg_str)
+                    except Exception:
+                        stale.append(client)
+                for c in stale:
+                    connected_clients.discard(c)
 
 async def aisstream_consumer():
     while True:
@@ -605,7 +609,16 @@ async def aisstream_consumer():
 
                 while True:
                     raw_data = await ws.recv()
-                    data = json.loads(raw_data)
+                    if isinstance(raw_data, bytes):
+                        try:
+                            raw_data = raw_data.decode("utf-8", errors="ignore")
+                        except Exception:
+                            continue
+                    try:
+                        data = json.loads(raw_data)
+                    except Exception:
+                        continue
+
                     msg_type = data.get("MessageType")
                     if msg_type == "SubscriptionConfirmation":
                         continue
@@ -614,7 +627,10 @@ async def aisstream_consumer():
                     mmsi = meta.get("MMSI")
                     if not mmsi:
                         continue
-                    mmsi = int(mmsi)
+                    try:
+                        mmsi = int(mmsi)
+                    except (ValueError, TypeError):
+                        continue
                     now_ts = time.time()
                     time_utc_str = meta.get("time_utc", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"))
 
@@ -910,21 +926,35 @@ async def handle_get_alerts(request):
     return web.json_response(get_active_alerts(), headers=CORS_HEADERS)
 
 async def websocket_handler(request):
-    ws = web.WebSocketResponse(heartbeat=25.0)
+    ws = web.WebSocketResponse(heartbeat=25.0, max_msg_size=4*1024*1024)
     await ws.prepare(request)
     connected_clients.add(ws)
     logger.info("Client connected. Total clients: %d", len(connected_clients))
 
     # Initial snapshot to client (keep frame < 1MB so mobile Safari and proxies never drop)
     try:
-        active_sample = sorted(vessels_db.values(), key=lambda v: v.get("last_updated", 0), reverse=True)[:2500]
+        all_sorted = sorted(vessels_db.values(), key=lambda v: v.get("last_updated", 0), reverse=True)
+        initial_sample = all_sorted[:500]
         await ws.send_str(json.dumps({
             "type": "SNAPSHOT",
-            "vessels": active_sample,
+            "vessels": initial_sample,
             "total_tracked": len(vessels_db),
             "alerts": get_active_alerts(),
             "server_time": time.time()
         }))
+        
+        # Follow up with remaining active vessels in small batches (250 vessels per frame, ~100KB)
+        # to populate client view without breaching 1009 frame size limits
+        remaining = all_sorted[500:2000]
+        for i in range(0, len(remaining), 250):
+            chunk = remaining[i:i + 250]
+            if not ws.closed:
+                await ws.send_str(json.dumps({
+                    "type": "VESSEL_BATCH",
+                    "count": len(chunk),
+                    "vessels": chunk
+                }))
+                await asyncio.sleep(0.01)
     except Exception as e:
         logger.warning("Error sending initial snapshot: %s", e)
 
@@ -963,6 +993,26 @@ def create_app():
         if os.path.exists(assets_dir):
             app.router.add_static("/assets", path=assets_dir, name="assets")
 
+    # Lifecycle management for background tasks
+    async def start_background_tasks(app_instance):
+        logger.info("Starting background tasks: aisstream_consumer and batch_broadcast_worker")
+        app_instance['ais_task'] = asyncio.create_task(aisstream_consumer())
+        app_instance['broadcast_task'] = asyncio.create_task(batch_broadcast_worker())
+
+    async def cleanup_background_tasks(app_instance):
+        logger.info("Cleaning up background tasks...")
+        for key in ('ais_task', 'broadcast_task'):
+            task = app_instance.get(key)
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+    app.on_startup.append(start_background_tasks)
+    app.on_cleanup.append(cleanup_background_tasks)
+
     return app
 
 async def main():
@@ -978,10 +1028,11 @@ async def main():
     print(f"[BOOT] SUCCESS: Server actively listening on http://{host}:{port} (Ready for Render port scan)", flush=True)
     logger.info("ShipFinder Tactical Cloud Relay running on http://%s:%d (Fleet size: %d)", host, port, len(vessels_db))
 
-    await asyncio.gather(
-        aisstream_consumer(),
-        batch_broadcast_worker()
-    )
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    finally:
+        await runner.cleanup()
 
 if __name__ == "__main__":
     try:
