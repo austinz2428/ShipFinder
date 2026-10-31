@@ -137,7 +137,10 @@ class AISClientService {
   }
 
   async fetchInitialSnapshot() {
-    const sources = [];
+    // 1. Prioritize fast static CDN snapshot on GitHub Pages (<400ms) so fleet renders instantly
+    // even if the cloud relay on Render is waking up from free-tier sleep.
+    const sources = ['./vessels.json', './fleet_snapshot.json'];
+
     if (this.relayUrl) {
       const httpBase = this.relayUrl.replace(/^wss?:\/\//i, (m) => m.toLowerCase().startsWith('wss') ? 'https://' : 'http://').replace(/\/ws\/?$/i, '');
       sources.push(`${httpBase}/api/vessels`);
@@ -145,11 +148,13 @@ class AISClientService {
       sources.push(`http://${window.location.hostname || 'localhost'}:8080/api/vessels`);
     }
 
-    sources.push('./vessels.json', './fleet_snapshot.json');
-
     for (const url of sources) {
       try {
-        const res = await fetch(`${url}?_t=${Date.now()}`);
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timeoutId = controller ? setTimeout(() => controller.abort(), 3500) : null;
+        const res = await fetch(`${url}?_t=${Date.now()}`, { signal: controller ? controller.signal : undefined });
+        if (timeoutId) clearTimeout(timeoutId);
+
         if (res.ok) {
           const data = await res.json();
           const list = Array.isArray(data) ? data : (data.vessels || []);
